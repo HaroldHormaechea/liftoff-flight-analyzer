@@ -1,3 +1,5 @@
+![Liftoff FPV racing](banner.jpg)
+
 # liftoff-flight-analyzer
 
 ## Purpose

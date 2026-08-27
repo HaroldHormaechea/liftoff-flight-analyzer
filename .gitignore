@@ -3,6 +3,7 @@ __pycache__/
 *.csv
 replays/
 reports/
+liftoff-pilot.md
 data/
 .venv/
 .DS_Store

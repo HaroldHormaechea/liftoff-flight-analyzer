@@ -22,6 +22,31 @@ Only Liftoff is handled. Other sims (Uncrashed, Velocidrone, DCL) expose
 different data or none at all; design for what they actually expose rather than
 assuming this pipeline transfers.
 
+## Step 0 — the pilot profile
+
+Everything below is generic. What makes a review useful is what it knows about
+*this* pilot: where their files live, the faults already diagnosed, the fix they
+are currently working on, and what they have already been told.
+
+**Look for a pilot profile, in this order, and read it before anything else:**
+
+1. the path in the `LIFTOFF_PILOT` environment variable
+2. `liftoff-pilot.md` in the working directory
+
+The profile overrides the generic paths below and carries the standing
+diagnosis. If one exists, it wins — including on where replays, reports and the
+PB history are kept.
+
+If there is no profile, work generically, and at the end of the review offer to
+start one. A single flight reviewed in isolation is worth much less than the
+second flight measured against the first.
+
+**A profile is personal data. It is gitignored here and must never be
+committed.** If this toolkit is mounted into another project — as a Claude Code
+skill, say — keep the profile in that project, not in this directory, and the
+tools will enforce it: `refuse_inside_toolkit()` hard-stops any attempt to write
+reports, replays or history under a linked toolkit root.
+
 ## The deliverable is an illustrated report, not a terminal dump
 
 `fpv_report.py` writes a folder holding the report, its figures and animated
@@ -127,9 +152,9 @@ Edit `report.md`, write that section, then re-run the script so `report.html`
 picks it up. An existing debrief is carried forward on every regeneration, so
 nothing is lost.
 
-Read the pilot's notes file first. Repeating advice they have already absorbed
-reads as not having watched the flight, and the value of this tool is almost
-entirely in tracking what changed since last time.
+Read the pilot profile and whatever notes it points to first. Repeating advice
+they have already absorbed reads as not having watched the flight, and the value
+of this tool is almost entirely in tracking what changed since last time.
 
 Coaching model that the measurements support:
 
@@ -166,7 +191,8 @@ tables into the conversation; they are in the file.
 
 ## Step 5 — persist
 
-Append a tight section to the notes file: date, what was flown, the measured
-result, the diagnosis, the single fix given, and the path to the report folder.
+Append a tight section to the notes the profile points at: date, what was flown,
+the measured result, the diagnosis, the single fix given, and the path to the
+report folder.
 Compact prose, and cut superseded detail as you go — the file is read in full at
 the start of every review, so it has to stay cheap to read.

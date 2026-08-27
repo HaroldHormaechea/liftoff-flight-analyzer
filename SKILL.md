@@ -1,5 +1,5 @@
 ---
-name: liftoff-flight-analyzer
+name: fpv-review
 description: Analyse a Liftoff FPV drone sim flight and coach the pilot on it. Use when they ask to evaluate, review or debrief a flight, lap or race, save an in-game recording, or ask how a session went.
 ---
 

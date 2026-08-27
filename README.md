@@ -26,8 +26,10 @@ Install it as a [Claude Code](https://claude.com/claude-code) skill:
 
 ```bash
 git clone https://github.com/HaroldHormaechea/liftoff-flight-analyzer \
-  ~/.claude/skills/liftoff-flight-analyzer
+  ~/.claude/skills/fpv-review
 ```
+
+The skill is called **fpv-review**; the repository is the tool it wraps.
 
 **Save a replay in Liftoff** from the finish screen or the pause menu — that is
 the only thing you have to remember to do. Nothing needs to be running while you

@@ -95,9 +95,15 @@ timed laps gets its own segment when it contains real flying — which is how a 
 that ends in a crash keeps the crash, since `lapTimes` only ever describes laps
 that finished.
 
-Useful flags: `--no-anim` when only the numbers are wanted, `--cam-span` for the
-follow-cam width in metres, `--stall-pad` for context around a stall clip,
-`--reset-debrief` to clear a hand-written debrief instead of carrying it forward.
+`report.html` opens in the default browser as soon as it is written, so the
+pilot sees the report rather than a path to it. Pass `--no-open` when that is a
+nuisance — a batch run, or the regeneration in step 3 that only exists to pick
+up a hand-written debrief.
+
+Useful flags: `--no-anim` when only the numbers are wanted, `--no-open` to keep
+the browser shut, `--cam-span` for the follow-cam width in metres, `--stall-pad`
+for context around a stall clip, `--reset-debrief` to clear a hand-written
+debrief instead of carrying it forward.
 
 ## Step 2 — read the figures before writing a word
 
@@ -149,8 +155,8 @@ that. A generated sentence can say a number is large, but only a person knows
 whether it is news.
 
 Edit `report.md`, write that section, then re-run the script so `report.html`
-picks it up. An existing debrief is carried forward on every regeneration, so
-nothing is lost.
+picks it up — with `--no-open`, since the pilot already has the page. An existing
+debrief is carried forward on every regeneration, so nothing is lost.
 
 Read the pilot profile and whatever notes it points to first. Repeating advice
 they have already absorbed reads as not having watched the flight, and the value

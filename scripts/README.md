@@ -16,9 +16,14 @@ nothing to pin, portable to any machine as a folder copy.
 ## The normal run
 
 ```bash
-python fpv_report.py --latest        # archive, decode, analyse, draw, write
+python fpv_report.py --latest        # archive, decode, analyse, draw, write, show
 python liftoff_pbs.py --save
 ```
+
+`report.html` opens in the default browser when it is written. The report is the
+deliverable, and a path printed to a terminal is not one. `--no-open` suppresses
+it, for a batch run or for the regeneration that only exists to pick up a
+hand-written Debrief.
 
 That writes `reports/<replay-stem>/`:
 

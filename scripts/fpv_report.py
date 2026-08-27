@@ -35,9 +35,15 @@ Usage
   python fpv_report.py replays/<archived-replay>.xml
   python fpv_report.py <replay.xml> -o reports --no-anim
   python fpv_report.py <replay.xml> --laps "732:1879,1879:3056"
+  python fpv_report.py --latest --no-open
 
 Lap ranges come from the replay metadata automatically; --laps only overrides
 them, for an abandoned attempt worth splitting by hand.
+
+report.html opens in the default browser once it is written, because the report
+is the deliverable and a path printed to a terminal is not one. --no-open
+suppresses that, which is what a batch run wants, or an agent regenerating the
+same report several times to hand-write the Debrief.
 """
 
 import argparse
@@ -47,6 +53,7 @@ import math
 import os
 import re
 import sys
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
@@ -1357,6 +1364,8 @@ def main():
                          "without it, an existing Debrief is carried forward")
     ap.add_argument("--no-html", action="store_true",
                     help="skip report.html, the double-clickable copy of report.md")
+    ap.add_argument("--no-open", action="store_true",
+                    help="do not open report.html in the default browser")
     ap.add_argument("--no-anim", action="store_true", help="skip the animated figures")
     ap.add_argument("--anim-max", type=float, default=40.0,
                     help="longest animation loop, seconds; anything longer is sped up and "
@@ -1553,6 +1562,18 @@ def main():
         print("        %s" % html_path)
     print("  %d figures, %d animations, %d segment(s)"
           % (len(figs) - 1, len(anims["laps"]) + len(anims["stalls"]), len(ranges)))
+
+    # The report is the deliverable, so show it rather than printing a path and
+    # trusting someone to follow it. Failure here is never worth aborting on:
+    # the files are already written, and a machine with no browser - a CI box, a
+    # headless container - must still exit 0.
+    if not (args.no_html or args.no_open):
+        try:
+            opened = webbrowser.open(html_path.resolve().as_uri())
+        except Exception:
+            opened = False
+        if not opened:
+            print("  (could not open a browser; open the file above by hand)")
 
 
 if __name__ == "__main__":

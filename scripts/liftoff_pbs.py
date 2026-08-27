@@ -116,7 +116,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=str(DEFAULT_ROOT), help="Liftoff LocalLow folder")
-    ap.add_argument("--history", default=str(Path(__file__).parent / "data" / "liftoff_history.json"))
+    ap.add_argument("--history", default="data/liftoff_history.json",
+                    help="PB snapshot history (default data/liftoff_history.json, "
+                         "relative to the working directory - never the script's "
+                         "own folder, which may be shared or public)")
     ap.add_argument("--save", action="store_true", help="append this snapshot to the history")
     ap.add_argument("--json", action="store_true", help="dump the snapshot as JSON instead")
     args = ap.parse_args()

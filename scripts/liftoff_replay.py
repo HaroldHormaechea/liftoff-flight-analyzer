@@ -74,6 +74,43 @@ COLUMNS = ["t", "pos_x", "pos_y", "pos_z", "quat_x", "quat_y", "quat_z", "quat_w
            "vel_x", "vel_y", "vel_z", "speed_ms", "speed_kmh"]
 
 
+def mounted_via_link():
+    """True when this toolkit is being run through a symlink or junction.
+
+    Someone who clones the repo and works inside it is running the real path,
+    and writing their replays and reports there is exactly right. Someone who
+    has mounted the toolkit into another project - as a skill, say - is running
+    a linked path, and for them the toolkit directory is shared code that their
+    own flight data must never leak into.
+
+    Comparing the invoked path with the resolved one distinguishes the two
+    without any configuration to forget."""
+    here = os.path.abspath(__file__)
+    return os.path.normcase(here) != os.path.normcase(os.path.realpath(here))
+
+
+TOOLKIT_ROOT = Path(os.path.realpath(__file__)).parent.parent
+
+
+def refuse_inside_toolkit(target, what):
+    """Hard stop before writing personal data into shared code.
+
+    Only fires when the toolkit is mounted via a link, so it cannot get in the
+    way of the ordinary clone-and-run case. `.gitignore` already covers these
+    paths, but an ignore rule is one `git add -f` away from being wrong, and it
+    does nothing about the data physically sitting in a public checkout."""
+    if not mounted_via_link():
+        return
+    t = Path(os.path.realpath(str(target)))
+    if t == TOOLKIT_ROOT or TOOLKIT_ROOT in t.parents:
+        sys.exit(
+            "refusing to write %s inside the toolkit.\n"
+            "  toolkit: %s\n"
+            "  target:  %s\n"
+            "This toolkit is mounted through a link, so it is shared code and may "
+            "be public. Pass a path in your own project instead." % (what, TOOLKIT_ROOT, t))
+
+
 def find_replays(root):
     root = Path(root)
     if not root.exists():

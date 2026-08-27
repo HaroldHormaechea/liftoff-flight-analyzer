@@ -467,7 +467,7 @@ def fig_traces(data, ranges, names, report, out, title, order=None):
         "speed": (0, math.ceil(max(10, max(s["spd"] for s in data)) / 10) * 10,
                   "speed   km/h", 104, ((10, "10 - stalled"),)),
         # 180, not 90: a pirouette runs the nose right past sideways, and a panel
-        # clipped at 90 would flatten the very fault it exists to show a flat ceiling. The
+        # clipped at 90 would flatten the very fault the panel exists to show. The
         # panel is taller than the others to pay for the range, so the 10 and 30
         # guides that matter on a normal corner stay apart.
         "sideslip": (0, 180, "sideslip   |deg|", 150,
@@ -1348,7 +1348,10 @@ def main():
                     help="parent folder for the report (default reports)")
     ap.add_argument("--name", help="report folder name (default: the replay's)")
     ap.add_argument("--laps", help='override lap ranges, "732:1879,1879:3056"')
-    ap.add_argument("--history", help="PB history JSON (default scripts/data/liftoff_history.json)")
+    ap.add_argument("--history", default="data/liftoff_history.json",
+                    help="PB snapshot history, from liftoff_pbs.py --save (default "
+                         "data/liftoff_history.json, relative to the working "
+                         "directory)")
     ap.add_argument("--reset-debrief", action="store_true",
                     help="discard the hand-written Debrief and put the stub back; "
                          "without it, an existing Debrief is carried forward")
@@ -1374,6 +1377,7 @@ def main():
         found = LR.find_replays(args.root)
         if not found:
             sys.exit("No replays under %s. Save one from the finish or pause screen." % args.root)
+        LR.refuse_inside_toolkit(args.archive_dir, "archived replays")
         path, _ = LR.archive(found[0], args.archive_dir)
         print("replay: %s" % path)
 
@@ -1382,6 +1386,7 @@ def main():
     meta["_source"] = str(path)
 
     outdir = Path(args.out) / (args.name or Path(path).stem)
+    LR.refuse_inside_toolkit(args.out, "reports")
     outdir.mkdir(parents=True, exist_ok=True)
     csv_path = outdir / "flight.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
@@ -1423,8 +1428,7 @@ def main():
     report = AF.analyse(data, ranges, names, dt, aargs)
     if not report:
         sys.exit("no moving samples in %s" % path)
-    pb = pb_context(meta, args.history
-                    or Path(__file__).with_name("data") / "liftoff_history.json")
+    pb = pb_context(meta, args.history)
 
     assets = outdir / "assets"
     # Clear the figures before redrawing. Every SVG in here is written by this

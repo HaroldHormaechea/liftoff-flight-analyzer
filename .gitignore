@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.csv
 replays/
+reports/
 data/
 .venv/
 .DS_Store

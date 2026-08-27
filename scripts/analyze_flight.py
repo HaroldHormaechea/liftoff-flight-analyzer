@@ -37,7 +37,7 @@ is in saying WHY, and that is a deterministic decision table, not a judgement:
 
   overrun     the path REVERSES and retraces itself - heading swings at least
               --reversal-deg and the recovery passes within --retrace-m of
-              ground already covered. He went past the point he needed, stopped,
+              ground already covered. The pilot went past the point, stopped,
               spun and came back.
   corner      another lap of the same flight turns hard at the same coordinates,
               so the direction change was the track asking for it.
@@ -198,7 +198,7 @@ def find_stalls(data, a, b, speed, min_s, gap_s, idle_thr, dt):
     MEDIAN throttle is under `idle_thr` - motors idle for most of the run means
     sitting on the grid or lying crashed, not a stall in flight.
 
-    Median, not peak: the grid wait ends with him spooling up to launch, so a
+    Median, not peak: the grid wait ends with the pilot spooling up to launch, so a
     peak test passes the one episode it most needs to reject. The margin is
     wide either way - the 2026-08-26 grid wait sat at 0.00 median throttle and
     every real stall in that flight was between 0.43 and 0.51.
@@ -247,7 +247,7 @@ def stall_geometry(data, s, e, dt, args, prev_end=None, next_start=None):
          None rather than a fabricated number, and the verdict degrades to the
          evidence that survives.
 
-    `net_m` is progress ACROSS the event: how far he actually got between
+    `net_m` is progress ACROSS the event: how far the quad actually got between
     entering the stall and leaving it. Small net with a large turn is the
     signature of stopping and coming back.
     """
@@ -312,7 +312,7 @@ def classify_stall(g, other, args):
 
     The reversal test is checked FIRST and deliberately outranks the cross-lap
     probe: doubling back on your own track is an overrun even when a real corner
-    happens to sit at the same place. That is exactly the 236.6 s case, where he
+    happens to sit at the same place. That is exactly the 236.6 s case, where the pilot
     missed a genuine 93-degree corner and reversed to re-take it.
     """
     turn = abs(g["turn_deg"]) if g["turn_deg"] is not None else None
@@ -381,7 +381,13 @@ def segment_stats(seg, dt, stall_speed):
     }
 
 
-def main():
+def build_parser():
+    """The CLI, exposed so other tools can borrow the thresholds.
+
+    fpv_report.py embeds this analysis rather than re-deriving it, so the
+    numbers in a written report and the numbers on the terminal come from one
+    implementation and one set of defaults. Adding a threshold here reaches
+    both."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("csv")
@@ -460,20 +466,25 @@ def main():
     g.add_argument("--roll-off", type=float, default=0.05,
                    help="stick deflection below which roll counts as absent "
                         "(default 0.05)")
-    args = ap.parse_args()
+    return ap
 
-    data = load(args.csv, args.speed_floor)
-    dt = sample_dt(data)
-    if args.laps:
-        ranges = []
-        for part in args.laps.split(","):
-            a, b = (int(x) for x in part.split(":"))
-            ranges.append((max(0, a), min(len(data), b)))
-        names = ["lap %d" % (i + 1) for i in range(len(ranges))]
-    else:
-        ranges = [(0, len(data))]
-        names = ["flight"]
 
+def default_args(csv_path="-"):
+    """Every threshold at its default, for callers that embed the analysis."""
+    return build_parser().parse_args([csv_path])
+
+
+def parse_laps(spec, n):
+    """"a:b,c:d" of sample indices -> [(a, b), ...] clamped to the data."""
+    out = []
+    for part in spec.split(","):
+        a, b = (int(x) for x in part.split(":"))
+        out.append((max(0, a), min(n, b)))
+    return out
+
+
+def analyse(data, ranges, names, dt, args):
+    """The whole analysis, as data. main() prints it; fpv_report.py draws it."""
     report = []
     for k, (a, b) in enumerate(ranges):
         raw = data[a:b]
@@ -519,6 +530,20 @@ def main():
                     "off_line": bool(other and other["dist_m"] > args.offline_m),
                 })
         report.append(entry)
+    return report
+
+
+def main():
+    args = build_parser().parse_args()
+    data = load(args.csv, args.speed_floor)
+    dt = sample_dt(data)
+    if args.laps:
+        ranges = parse_laps(args.laps, len(data))
+        names = ["lap %d" % (i + 1) for i in range(len(ranges))]
+    else:
+        ranges = [(0, len(data))]
+        names = ["flight"]
+    report = analyse(data, ranges, names, dt, args)
 
     if args.json:
         print(json.dumps(report, indent=2))

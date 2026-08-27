@@ -44,11 +44,34 @@ Then just ask, in your own words:
 
 > Did I actually fix the thing you told me about last time?
 
-**What you get back:** a short debrief. Your pace and how coordinated your flying
-was, lap by lap. Every place the quad slowed down or stopped, each labelled with
-why it happened. What you did *well*, called out by name — a corner flown right
-looks just as distinct in the data as one flown wrong. Then one thing to fix and
-one drill to fix it with.
+**What you get back:** an illustrated report — a folder with a `report.md` and a
+double-clickable `report.html` beside it.
+
+It opens with the debrief, because that is the answer: your pace and how
+coordinated your flying was, lap by lap; every place the quad slowed down or
+stopped, each labelled with why it happened; what you did *well*, called out by
+name, because a corner flown right looks just as distinct in the data as one
+flown wrong. Then one thing to fix, and one drill to fix it with.
+
+Everything after that is the evidence, and you only open it if the answer makes
+you curious:
+
+- **Lap times** — your laps as bars with the slow spots marked in red, against
+  your best ever lap on that track.
+- **Circuit path** — the track drawn from your own flight and coloured by speed,
+  so you can see *where* the time went, with the laps overlaid to show where your
+  line moved.
+- **Flight playback** — your lap animated. A solid arrow shows where the quad was
+  *pointing* and a dashed ray where it was actually *going*; when they separate,
+  you are travelling sideways and the camera is not telling you. Every slow spot
+  gets its own short clip, magnified, which is usually the moment a fault stops
+  being an abstraction.
+- **Numbers** — speed, sideslip and throttle traces, per-corner tables, and the
+  stall analysis, with the reference material tucked into collapsible sections.
+
+The figures are hand-drawn SVG and the animations are plain SMIL, so there is
+nothing to install, they stay sharp at any size, and they read correctly on a
+light or a dark background.
 
 It also tracks your personal bests between sessions, so it will notice when you
 beat a time — including on flights you never saved a replay for.

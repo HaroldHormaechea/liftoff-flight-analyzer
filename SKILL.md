@@ -22,42 +22,76 @@ Only Liftoff is handled. Other sims (Uncrashed, Velocidrone, DCL) expose
 different data or none at all; design for what they actually expose rather than
 assuming this pipeline transfers.
 
-## Step 1 — decode the replay
+## The deliverable is an illustrated report, not a terminal dump
+
+`fpv_report.py` writes a folder holding the report, its figures and animated
+replays of every lap and every stall. That is what the pilot gets. The terminal
+output of `analyze_flight.py` is for answering a quick question mid-conversation,
+not for a review.
+
+## Step 1 — build the report
 
 ```bash
 S=scripts
-python $S/liftoff_replay.py --list
-python $S/liftoff_replay.py --latest --archive-dir replays -o flight.csv
+python $S/fpv_report.py --latest                  # newest replay saved in-game
+python $S/fpv_report.py replays/<file>.xml        # a specific archived one
 ```
 
-Replays live in `<LocalLow>/LuGus Studios/Liftoff/Recordings/<GameMode>/`.
+`--latest` archives the replay before it reads anything, then writes
+`reports/<replay-stem>/`:
 
-**Always pass `--archive-dir`.** Liftoff names a replay after its track and total
-time, so every abandoned attempt on a track collides on one filename and each
-save destroys the previous one. The script copies the replay to
-`<timestamp>_<environment>_<mode>_<Nlap>.xml` BEFORE decoding, then decodes the
-copy, so an analysis always refers to a file that still exists. It is idempotent,
-so re-running is safe.
+    report.md          the debrief the pilot reads and you edit
+    report.html        the same thing, double-clickable, animations playing
+    analysis.json      EVERYTHING, including what the report leaves out
+    flight.csv         the decoded per-sample data
+    assets/*.svg       figures and animated replays
 
-Read the metadata it prints. `lapTimes` and `lapStartIndices` are populated only
-for runs that completed a lap; they give exact per-lap sample boundaries. A run
-with neither and a `00_00_000` name is an abandoned attempt — still analysable as
-one segment, just not lap-by-lap.
+**`analysis.json` is the one you read, not `report.md`.** The report is an
+argument made to a person: sections are collapsed, panels are dropped, numbers
+are rounded. The JSON is a deliberate superset — every segment statistic, every
+corner, every stall, the generated findings, the exact thresholds that produced
+them, the measured sample rate, the lap index boundaries, and a `not_in_report`
+list naming what was left out and where it lives instead. Never re-derive from
+`flight.csv` what is already sitting in there.
 
-Archived replays are the durable record. `Recordings/` is scratch space that
-Liftoff overwrites.
+Report structure, in reading order: a compact header, then **Debrief**, **Data
+analysis**, **Lap times**, **Circuit path**, **Flight playback**, **Numbers**,
+then everything else collapsed. The debrief leads because it is the answer, and
+everything after it is the evidence — which only gets read when the answer
+provokes a question.
 
-## Step 2 — analyse the geometry
+**Archiving matters.** Liftoff names a replay after its track and total time, so
+every abandoned attempt on a track collides on one filename and each save
+destroys the previous one.
 
-```bash
-python $S/analyze_flight.py flight.csv --laps "73:1077,1077:1768"
-```
+Lap boundaries come out of the replay metadata, so `--laps` is only needed for an
+abandoned attempt worth splitting by hand. Untimed flying either side of the
+timed laps gets its own segment when it contains real flying — which is how a run
+that ends in a crash keeps the crash, since `lapTimes` only ever describes laps
+that finished.
 
-Lap ranges are sample indices: `lapStartIndices[0]` to that plus
-`lapTimes[0] * 10`, and so on. Without `--laps` it treats the flight as one
-segment, and the cross-lap stall probe degrades to the reversal test only.
+Useful flags: `--no-anim` when only the numbers are wanted, `--cam-span` for the
+follow-cam width in metres, `--stall-pad` for context around a stall clip,
+`--reset-debrief` to clear a hand-written debrief instead of carrying it forward.
 
-What to read:
+## Step 2 — read the figures before writing a word
+
+- **Lap times** — lap bars with the stalls marked in red, against the pilot's
+  best ever lap on that track. Says immediately whether the deficit is pace or
+  stops.
+- **Circuit path** — the track coloured by speed, one figure per lap, stalls
+  pinned. Where the time is lost, geographically. The overlay shows lap-to-lap
+  line differences, which no change of stick technique can fix.
+- **Flight playback** — nose arrow versus dashed direction-of-travel ray. The
+  angle between them is the sideslip, and the arrow turns red past 30 degrees.
+  The stall clips are where a fault becomes visible rather than tabulated.
+- **Traces** — speed, sideslip and throttle on one clock, stalls banded. Tilt and
+  the stick traces are a second figure, collapsed; open it when the question is
+  about inputs rather than results.
+- **Corner scorecard** — tilt against sideslip, plus throttle added per corner.
+  Down and to the right is a committed, coordinated corner.
+
+What to read in the numbers:
 
 - **`sideslip`** — the angle between where the nose points and where the quad is
   actually going. Under ~10 deg is coordinated, 30+ is a skid, near 90 means
@@ -78,26 +112,21 @@ What to read:
   with a tiny radius and high sideslip is the failure pattern.
 - **entry vs exit speed** — exit faster than entry is slow-in/fast-out working.
 
-`--trace` prints the stick trace around each stall when a specific event needs
-reconstructing frame by frame.
+## Step 3 — write the Debrief section
 
-## Step 3 — the other sources, only when needed
+The script fills in everything factual and leaves `## Debrief` empty on purpose.
+It writes what happened; it does not write the coaching, because the diagnosis
+depends on what the pilot has already been told and the script does not know
+that. A generated sentence can say a number is large, but only a person knows
+whether it is news.
 
-- **`liftoff_pbs.py --save`** — personal bests per track, diffed against the last
-  snapshot. Liftoff overwrites these in place, so a beaten time is gone unless
-  snapshotted. Run it every session. It also reveals flights that were never
-  recorded, which is often where the real progress is.
-- **`liftoff_telemetry.py`** — live UDP feed, 100 Hz, and the only route to gyro,
-  battery and motor RPM. It must be running during the flight. Reach for it for
-  tuning-level questions (oscillation, propwash, PID feel), not for piloting
-  technique, which 10 Hz covers. Enabled via `TelemetryConfiguration.json` in the
-  Liftoff LocalLow folder, default endpoint `127.0.0.1:9001`.
+Edit `report.md`, write that section, then re-run the script so `report.html`
+picks it up. An existing debrief is carried forward on every regeneration, so
+nothing is lost.
 
-## Step 4 — coach
-
-Keep a notes file per pilot and read it before writing anything. Repeating advice
-they have already absorbed reads as not having watched the flight, and the value
-of this tool is almost entirely in tracking what changed since last time.
+Read the pilot's notes file first. Repeating advice they have already absorbed
+reads as not having watched the flight, and the value of this tool is almost
+entirely in tracking what changed since last time.
 
 Coaching model that the measurements support:
 
@@ -108,7 +137,7 @@ Coaching model that the measurements support:
 - Pilots coming from fixed-wing sims have a rudder habit that reappears below
   roughly 25 km/h. Use the bridge — load factor, thrust vector, slow-in/fast-out
   — rather than teaching from zero.
-- A stall tagged `[OFF LINE]` is a track-knowledge error, not a stick error. No
+- A stall tagged off-line is a track-knowledge error, not a stick error. No
   change of technique fixes it; slow exploratory laps do.
 - Late-session runs carry almost no diagnostic value. Do not debug fatigue.
 
@@ -116,9 +145,25 @@ Tone: lead with the number and the cause. Name **one** thing to fix and give
 **one** drill. Do not stack three — a pilot who is given three fixes does none of
 them, and the next flight's data cannot attribute a change to any of them.
 
+Then say the same thing in chat, short, and link the report. Do not paste the
+tables into the conversation; they are in the file.
+
+## Step 4 — the other sources, only when needed
+
+- **`liftoff_pbs.py --save`** — personal bests per track, diffed against the last
+  snapshot. Liftoff overwrites these in place, so a beaten time is gone unless
+  snapshotted. Run it every session. It also reveals flights that were never
+  recorded, which is often where the real progress is, and it is what the
+  report's "best ever" bar is drawn from.
+- **`liftoff_telemetry.py`** — live UDP feed, 100 Hz, and the only route to gyro,
+  battery and motor RPM. It must be running during the flight. Reach for it for
+  tuning-level questions (oscillation, propwash, PID feel), not for piloting
+  technique, which 10 Hz covers. Enabled via `TelemetryConfiguration.json` in the
+  Liftoff LocalLow folder, default endpoint `127.0.0.1:9001`.
+
 ## Step 5 — persist
 
 Append a tight section to the notes file: date, what was flown, the measured
-result, the diagnosis, and the single fix given. Compact prose, and cut
-superseded detail as you go — the file is read in full at the start of every
-review, so it has to stay cheap to read.
+result, the diagnosis, the single fix given, and the path to the report folder.
+Compact prose, and cut superseded detail as you go — the file is read in full at
+the start of every review, so it has to stay cheap to read.

@@ -7,6 +7,7 @@ nothing to pin, portable to any machine as a folder copy.
 
 | script | what it does |
 |---|---|
+| `fpv_report.py` | **the normal entry point** — replay in, illustrated Markdown debrief out |
 | `liftoff_replay.py` | archive + decode a saved in-game replay to CSV |
 | `analyze_flight.py` | flight geometry: sideslip, tilt, turn radius, corners, yaw-only time, and stalls classified as overrun / corner / hesitation |
 | `liftoff_pbs.py` | personal bests per track, with snapshot history |
@@ -15,9 +16,55 @@ nothing to pin, portable to any machine as a folder copy.
 ## The normal run
 
 ```bash
-python liftoff_replay.py --latest --archive-dir ../replays -o flight.csv
-python analyze_flight.py flight.csv --laps "73:1077,1077:1768"
+python fpv_report.py --latest        # archive, decode, analyse, draw, write
 python liftoff_pbs.py --save
+```
+
+That writes `reports/<replay-stem>/`:
+
+| file | for whom |
+|---|---|
+| `report.md` | the pilot reads it; the Debrief is written into it by hand |
+| `report.html` | the same report, double-clickable, animations playing |
+| `analysis.json` | **everything**, including what the report leaves out |
+| `flight.csv` | the decoded per-sample data |
+| `assets/*.svg` | figures and animated replays |
+
+Lap boundaries come from the replay metadata, so nothing has to be worked out by
+hand. Untimed flying either side of the laps that finished gets its own segment
+when it contains real flying — which is how a run that ends in a crash keeps the
+crash, since `lapTimes` only describes laps that completed.
+
+### report.md is a summary; analysis.json is the record
+
+The report is an argument made to a person, and it edits itself down to make
+that argument: sections are collapsed, two trace panels are moved out of the
+way, numbers are rounded to what a reader can hold. `analysis.json` is a
+deliberate superset — every segment statistic, every corner, every stall, the
+generated findings, the exact thresholds that produced them, the measured sample
+rate, the lap index boundaries, and a `not_in_report` list naming what was left
+out and where it lives instead.
+
+So a later reader — usually a language model picking the work back up — reads
+the JSON, never re-derives from the CSV what has already been computed, and
+never has to guess which threshold produced a number.
+
+### Section order
+
+Header, **Debrief**, **Data analysis**, **Lap times**, **Circuit path**,
+**Flight playback**, **Numbers**, then everything else collapsed. The debrief
+leads because it is the answer, and everything after it is the evidence for the
+answer — which only gets read when the answer provokes a question.
+
+Disclosure uses plain `<details>`, so one construct works in the `.md`, in the
+generated `.html`, in the VS Code preview and on GitHub, with no JavaScript.
+
+For a quick number mid-conversation, the two lower-level steps still work on
+their own:
+
+```bash
+python liftoff_replay.py --latest --archive-dir replays -o flight.csv
+python analyze_flight.py flight.csv --laps "73:1077,1077:1768"
 ```
 
 Lap ranges are sample indices, from the replay metadata: `lapStartIndices[i]` to
@@ -120,8 +167,8 @@ Rules that keep the numbers honest, all deterministic:
 * Sub-runs less than `--stall-gap` apart merge — one bounce back over the
   threshold is still one event.
 * A run whose **median** throttle is under `--idle-throttle` is grid time or a
-  dead quad, not a stall. Median, not peak: the grid wait ends with the pilot
-  spooling up to launch, so a peak test passes the one episode it most needs to reject.
+  dead quad, not a stall. Median, not peak: the grid wait ends with the pilot spooling
+  up to launch, so a peak test passes the one episode it most needs to reject.
 * An episode starting at the first sample is pre-launch, not a stall.
 * Measurement windows are clamped to the neighbouring stalls. Two stalls four
   seconds apart would otherwise each measure heading across the other, and the
@@ -148,14 +195,87 @@ at 100 Hz, plus gyro, battery and motor RPM. It must be running during the
 flight, which is why replays are the default source instead.
 
 It is kept for two reasons: gyro and motor RPM are unreachable any other way and
-are what tuning questions need, and it is enabled game-side via
-`TelemetryConfiguration.json` (default `127.0.0.1:9001`), so the receiver and
-that config belong together. Delete both or neither.
+are what tuning questions need, and the endpoint is already enabled on this
+machine via `TelemetryConfiguration.json` (`127.0.0.1:9001`), so deleting the
+receiver would orphan a live config. Delete both together or neither.
 
 ```bash
 python liftoff_telemetry.py --probe          # confirm the feed
 python liftoff_telemetry.py -o flight.csv    # record until Ctrl+C
 ```
+
+## The report
+
+`fpv_report.py` is the reason the other scripts exist. It embeds
+`analyze_flight.py` rather than re-deriving anything — it calls `build_parser()`
+for the thresholds and `analyse()` for the numbers — so a figure and a table can
+never disagree, and a threshold added there reaches both.
+
+It writes what happened and stops. `## Debrief` is left empty deliberately: a
+generated sentence can say a number is large, but only a person knows whether
+the pilot was already told about it last session, which is the whole difference
+between coaching and nagging.
+
+### Figures
+
+| figure | what it answers |
+|---|---|
+| `timeline.svg` | where the time went — lap bars, stalls in red, against the best ever lap |
+| `track.svg` | the line coloured by speed, one panel per lap, stalls pinned |
+| `line.svg` | laps overlaid — a line difference, which no stick technique fixes |
+| `traces.svg` | speed, sideslip, tilt, sticks, throttle on one clock, stalls banded |
+| `corners.svg` | tilt against sideslip, plus throttle added per corner |
+| `anim_lap*.svg` | the lap played back, with a follow cam |
+| `anim_stall_*.svg` | each stall played back, ±4 s of context |
+
+### Everything is standard library
+
+Figures are hand-written SVG and the animations are SMIL. No matplotlib, no
+Pillow, no ffmpeg, nothing to install, and the output is diffable text that
+scales to any size. One file works on a light and a dark background, via CSS
+custom properties inside a `prefers-color-scheme` media query.
+
+Animated SVG plays in a browser and in the VS Code Markdown preview. Where it
+does not play, every animation still reads as a static picture, because the
+whole line and all the annotations are drawn underneath the animation.
+
+### What the animations show, and why it is built this way
+
+The moving marker carries a **nose arrow** and a dashed **direction-of-travel
+ray** from one origin. The angle between them *is* the sideslip, so the fault is
+visible instead of tabulated, and the arrow turns red past 30°.
+
+Four decisions that are not arbitrary:
+
+* **Position is `animateTransform translate`, not `animateMotion`.**
+  `animateMotion` distributes frames along path *length*, which plays the slow
+  parts fast — the exact opposite of what a debrief has to show.
+* **The travel ray is hidden while the quad is stationary**, not frozen at its
+  last bearing. A stopped quad has no direction of travel, and drawing one would
+  be a lie at the moment the figure matters most.
+* **The red flag is recomputed from raw geometry**, not read from the `slip`
+  column. `analyze_flight` leaves sideslip undefined below `--speed-floor`
+  because the *statistic* is meaningless down there — correct for a median, but
+  the pirouette lives below that floor, and reusing the field would grey the
+  arrow out exactly when it should be shouting.
+* **The red arrow is a second arrow cross-faded on opacity**, not an animated
+  `fill`. SMIL does not resolve a CSS `var()` inside an animation value, so
+  animating `fill` would mean hard-coding hex and giving up the theme.
+
+A **follow cam** repeats the flight magnified and centred on the quad, because
+at whole-lap scale the nose-versus-travel gap is a few pixels wide.
+
+Long segments are played back faster than real time — capped by `--anim-max`,
+default 40 s — and the speed-up factor is printed on the figure.
+
+### Colour
+
+The speed ramp is red → amber → teal, deliberately not red → green: it stays
+separable for the common colour-vision deficiencies and both ends hold contrast
+on either background. It is scaled to the **p90** speed, not the maximum,
+because against the maximum one fast straight pushes the whole working range of
+the flight into two shades and the slow sections — the ones the debrief is
+about — stop being visible.
 
 ## Not covered
 

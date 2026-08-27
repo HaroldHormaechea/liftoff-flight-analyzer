@@ -79,9 +79,12 @@ follow-cam width in metres, `--stall-pad` for context around a stall clip,
 - **Lap times** — lap bars with the stalls marked in red, against the pilot's
   best ever lap on that track. Says immediately whether the deficit is pace or
   stops.
-- **Circuit path** — the track coloured by speed, one figure per lap, stalls
-  pinned. Where the time is lost, geographically. The overlay shows lap-to-lap
-  line differences, which no change of stick technique can fix.
+- **Circuit path** — the track coloured by speed, one collapsed figure per lap,
+  stalls pinned. Where the time is lost, geographically. The overlay shows
+  lap-to-lap line differences, which no change of stick technique can fix. There
+  is deliberately no combined "all laps" entry: a merged figure listed beside the
+  laps it merges reads as one more lap. Seeing everything at once is the
+  expand-all control the HTML puts on any section with two or more disclosures.
 - **Flight playback** — nose arrow versus dashed direction-of-travel ray. The
   angle between them is the sideslip, and the arrow turns red past 30 degrees.
   The stall clips are where a fault becomes visible rather than tabulated.

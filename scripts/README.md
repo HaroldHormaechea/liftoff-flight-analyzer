@@ -56,8 +56,15 @@ Header, **Debrief**, **Data analysis**, **Lap times**, **Circuit path**,
 leads because it is the answer, and everything after it is the evidence for the
 answer — which only gets read when the answer provokes a question.
 
-Disclosure uses plain `<details>`, so one construct works in the `.md`, in the
-generated `.html`, in the VS Code preview and on GitHub, with no JavaScript.
+Circuit path and Flight playback hold one collapsed entry per lap. Disclosure
+uses plain `<details>`, so one construct works in the `.md`, in the generated
+`.html`, in the VS Code preview and on GitHub, with no JavaScript.
+
+The generated HTML adds an **expand all / collapse all** control to any section
+holding two or more disclosures. That is done by the converter and not by
+`build_report()`, on purpose: `report.md` stays clean Markdown, because the
+affordance belongs to the rendered page and the source should not carry a button
+only one of its two renderings can use.
 
 For a quick number mid-conversation, the two lower-level steps still work on
 their own:
@@ -220,13 +227,19 @@ between coaching and nagging.
 
 | figure | what it answers |
 |---|---|
-| `timeline.svg` | where the time went — lap bars, stalls in red, against the best ever lap |
-| `track.svg` | the line coloured by speed, one panel per lap, stalls pinned |
+| `timeline.svg` | lap bars, stalls in red, against the best ever lap on that track |
+| `track_<segment>.svg` | one per lap: the line coloured by speed, stalls pinned |
 | `line.svg` | laps overlaid — a line difference, which no stick technique fixes |
-| `traces.svg` | speed, sideslip, tilt, sticks, throttle on one clock, stalls banded |
+| `traces.svg` | speed, sideslip and throttle on one clock, stalls banded |
+| `traces_extra.svg` | tilt and the stick inputs — collapsed in the report |
 | `corners.svg` | tilt against sideslip, plus throttle added per corner |
-| `anim_lap*.svg` | the lap played back, with a follow cam |
+| `anim_<segment>.svg` | one per lap: the lap played back, with a follow cam |
 | `anim_stall_*.svg` | each stall played back, ±4 s of context |
+
+There is deliberately **no combined multi-panel track figure and no whole-flight
+animation**. A figure that merges the laps, sitting in a list beside the laps it
+merges, reads as one more lap; the way to see everything at once is the
+expand-all control, not another entry. Do not add them back.
 
 ### Everything is standard library
 

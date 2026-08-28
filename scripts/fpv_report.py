@@ -1125,9 +1125,12 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
             body += ["**%s**" % label, "", "![%s](%s)" % (label, rel(path)), ""]
         L += details("Stalls (%d)" % len(stalls), body)
 
+    # A real no-break space, not &nbsp;. This line is Markdown prose, so it goes
+    # through md_inline, and esc() would turn the entity into visible text. The
+    # character is correct in the .md and in the .html alike.
     L += ["---", "",
-          "Replay `%s` &nbsp;·&nbsp; samples in `%s` &nbsp;·&nbsp; **full analysis, "
-          "including everything not drawn above, in `analysis.json`** &nbsp;·&nbsp; "
+          "Replay `%s`\u00a0·\u00a0samples in `%s`\u00a0·\u00a0**full analysis, "
+          "including everything not drawn above, in `analysis.json`**\u00a0·\u00a0"
           "generated %s by `fpv_report.py`"
           % (Path(meta.get("_source", "?")).name, rel(figs["csv"]),
              datetime.now().strftime("%Y-%m-%d %H:%M"))]
@@ -1234,13 +1237,30 @@ transition:color .12s,background .12s,border-color .12s}
 
 
 def md_inline(t):
+    """Inline Markdown, in the order the constructs bind.
+
+    Code spans and images are lifted out into placeholders before emphasis runs,
+    and put back afterwards. Emphasis is a text construct and has no business
+    reaching inside generated markup: without this, the underscores in a replay
+    name - `20260828-140705_BardwellsYard_Race_3lap.xml` - and in image paths
+    are read as italics, and the tags come out interleaved.
+
+    The placeholder uses NUL, which cannot appear in a report: the text is built
+    from XML attributes and formatted numbers."""
+    held = []
+
+    def hold(html):
+        held.append(html)
+        return "\x00%d\x00" % (len(held) - 1)
+
     t = esc(t)
-    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
-    t = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r'<img src="\2" alt="\1">', t)
+    t = re.sub(r"`([^`]+)`", lambda m: hold("<code>%s</code>" % m.group(1)), t)
+    t = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)",
+               lambda m: hold('<img src="%s" alt="%s">' % (m.group(2), m.group(1))), t)
     t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
     t = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", t)
     t = re.sub(r"_([^_]+)_", r"<em>\1</em>", t)
-    return t
+    return re.sub(r"\x00(\d+)\x00", lambda m: held[int(m.group(1))], t)
 
 
 EXPAND_ICON = ('<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">'

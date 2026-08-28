@@ -156,4 +156,4 @@ The dashed ray is where the quad is *going*. The arrow is where it is *pointing*
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 17:43 by `fpv_report.py`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 17:51 by `fpv_report.py`

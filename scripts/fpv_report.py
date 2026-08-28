@@ -340,13 +340,18 @@ def quad_glyph(angle, scale=1.0, fill="var(--fg)"):
             % (n(angle, 1), n(scale, 2), fill))
 
 
-def legend_speed(x, y, vref, w=210):
+def legend_speed(x, y, vref, w=210, label="speed"):
+    """The key for the speed ramp the paths are drawn with.
+
+    `label` exists because the animation already has a live speed readout, and
+    two things both captioned "speed" leave the reader guessing which one the
+    coloured line belongs to."""
     stops = "".join('<stop offset="%d%%" stop-color="%s"/>' % (100 * i // 8, ramp(i / 8.0))
                     for i in range(9))
     return ('<defs><linearGradient id="spd">%s</linearGradient></defs>'
             '<rect x="%s" y="%s" width="%d" height="9" rx="4.5" fill="url(#spd)"/>'
             % (stops, n(x), n(y), w)
-            + txt(x, y - 5, "speed", 9.5, "mut")
+            + txt(x, y - 5, label, 9.5, "mut")
             + txt(x, y + 20, "0", 9.5, "mut")
             + txt(x + w, y + 20, "%d+ km/h" % round(vref), 9.5, "mut", "end"))
 
@@ -751,7 +756,10 @@ def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
     bounds = bounds_of(seg)
     mh = fit_height(bounds, W, lo=230, hi=440)
     cam = 300
-    H = 46 + mh + 34 + cam + 44
+    # 74, not 44, at the foot: the speed ramp key sits above the caption. The
+    # path is coloured by speed in both the overview and the follow cam, and
+    # until this was drawn there was nothing anywhere saying so.
+    H = 46 + mh + 34 + cam + 74
     pr = Proj(None, 0, 46, W, mh, bounds=bounds)
 
     body = [txt(14, 26, title, 15, "ttl"), panel(5, 46, W - 10, mh)]
@@ -840,6 +848,7 @@ def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
                    animate_tf("translate",
                               ["%s,0" % n(strip.tx(data[i]["t"]) - strip.x, 1) for i in idx],
                               times, dur)))
+    body.append(legend_speed(14, H - 52, vref, label="path colour"))
     foot = [caption, "nose = arrow", "direction of travel = dashed ray"]
     if rate > 1.01:
         foot.append("playback %.1f× real time" % rate)

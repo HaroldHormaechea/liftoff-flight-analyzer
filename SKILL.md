@@ -85,6 +85,12 @@ then everything else collapsed. The debrief leads because it is the answer, and
 everything after it is the evidence — which only gets read when the answer
 provokes a question.
 
+In `report.html` those sections are **tabs**, in a row under the race header, and
+the Debrief is the one open on arrival. `report.md` is unchanged — one linear
+document, still correct on GitHub and in the VS Code preview. A tab click updates
+the fragment, so `report.html#numbers` opens straight into that section and is
+worth linking directly when the answer lives in one place.
+
 **Archiving matters.** Liftoff names a replay after its track and total time, so
 every abandoned attempt on a track collides on one filename and each save
 destroys the previous one.

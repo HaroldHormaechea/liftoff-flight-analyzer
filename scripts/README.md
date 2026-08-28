@@ -65,6 +65,37 @@ Circuit path and Flight playback hold one collapsed entry per lap. Disclosure
 uses plain `<details>`, so one construct works in the `.md`, in the generated
 `.html`, in the VS Code preview and on GitHub, with no JavaScript.
 
+### Tabs, in the HTML only
+
+`add_tabs()` wraps each `<h2>` section in a `<section class="panel">` and emits a
+`role="tablist"` row directly under the race header. The Debrief is open on
+arrival, because it is still the first section — the tab row changes how much of
+the report is on screen, not what the report argues.
+
+Three things are deliberate:
+
+- **It runs after `add_expand_all()`.** Both split on `<h2>`, so they agree about
+  what a section is by construction, and taking the tab label from the text
+  before the expand-all button leaves that button inside the panel holding the
+  disclosures it opens.
+- **The trailing rule and provenance line are lifted out of the last section**
+  and left below the panels. They describe the whole report, and nobody should
+  have to guess which tab names the replay it came from.
+- **Everything is gated on a `.js` class** set by an inline script in `<head>`.
+  Without JavaScript the nav never appears and the page is the single scroll it
+  always was, so nothing is reachable only through a control that is not running;
+  gating in CSS rather than hiding panels on load also avoids a flash of the
+  whole report before it collapses to one tab. `@media print` restores every
+  panel, because paper has no tabs.
+
+The active tab is written to the fragment with `history.replaceState`, so
+`report.html#numbers` deep-links and the back button still leaves the report
+rather than walking back through tab clicks. Arrow keys, Home and End move
+between tabs.
+
+As with expand-all, this is done by the converter and not by `build_report()`:
+`report.md` stays one linear Markdown document.
+
 The generated HTML adds an **expand all / collapse all** control to any section
 holding two or more disclosures. That is done by the converter and not by
 `build_report()`, on purpose: `report.md` stays clean Markdown, because the

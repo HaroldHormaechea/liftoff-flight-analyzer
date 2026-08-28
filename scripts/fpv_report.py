@@ -1210,6 +1210,26 @@ font-weight:500;letter-spacing:.01em}
 h2 .xall:hover{color:var(--acc);border-color:var(--acc)}
 h2 .xall svg{transition:transform .12s}
 h2 .xall[data-open="1"] svg{transform:rotate(180deg)}
+/* Tabs. Everything here is gated on .js, set by an inline script in <head>, so
+   a page opened without JavaScript keeps the old single scroll and never shows
+   a control that cannot work. Gating in CSS rather than hiding panels from
+   JavaScript on load also means there is no flash of the whole report first. */
+.tabs{display:none;gap:4px;flex-wrap:wrap;position:sticky;top:0;z-index:5;
+margin:0 0 30px;padding:10px 0;background:var(--bg);border-bottom:1px solid var(--line)}
+.js .tabs{display:flex}
+.tab{appearance:none;-webkit-appearance:none;border:1px solid transparent;
+border-radius:8px;background:transparent;color:var(--mut);font:inherit;font-size:14px;
+font-weight:600;padding:7px 14px;cursor:pointer;white-space:nowrap;
+transition:color .12s,background .12s,border-color .12s}
+.tab:hover{color:var(--fg);background:var(--pan)}
+.tab.on{color:var(--acc);border-color:var(--line);background:var(--pan)}
+.tab:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.js .panel{display:none}
+.js .panel.on{display:block}
+.panel>h2:first-child{border-top:0;padding-top:0;margin-top:0}
+/* Paper has no tabs: print every panel, in order, and drop the nav. */
+@media print{.tabs{display:none!important}.js .panel{display:block!important}
+.panel>h2:first-child{border-top:1px solid var(--line);padding-top:22px;margin-top:52px}}
 """
 
 
@@ -1262,6 +1282,112 @@ def add_expand_all(out):
         out[i] = ('<h2>%s<button class="xall" type="button" data-open="0">%s'
                   "<span>expand all</span></button></h2>" % (label, EXPAND_ICON))
     return out
+
+
+TAB_JS = """
+(function () {
+  const nav = document.querySelector('.tabs');
+  if (!nav) return;
+  const tabs = [...nav.querySelectorAll('.tab')];
+  const panels = [...document.querySelectorAll('.panel')];
+  function show(id, remember) {
+    for (const t of tabs) {
+      const on = t.dataset.panel === id;
+      t.classList.toggle('on', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    }
+    for (const p of panels) p.classList.toggle('on', p.id === id);
+    // replaceState rather than assigning location.hash: the tab row is
+    // navigation inside one document, and every click landing in the back
+    // stack would make the back button useless for leaving the report.
+    if (remember && history.replaceState) history.replaceState(null, '', '#' + id);
+  }
+  nav.addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (t) { show(t.dataset.panel, true); scrollTo(0, 0); }
+  });
+  nav.addEventListener('keydown', e => {
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const j = {ArrowRight: (i + 1) % tabs.length,
+               ArrowLeft: (i - 1 + tabs.length) % tabs.length,
+               Home: 0, End: tabs.length - 1}[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    tabs[j].focus();
+    show(tabs[j].dataset.panel, true);
+  });
+  const wanted = () => decodeURIComponent(location.hash.slice(1));
+  show(panels.some(p => p.id === wanted()) ? wanted() : panels[0].id, false);
+  addEventListener('hashchange', () => {
+    if (panels.some(p => p.id === wanted())) show(wanted(), false);
+  });
+})();
+"""
+
+
+def slugify(text, taken):
+    """A readable id for a section, unique within the page."""
+    base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "section"
+    s, n = base, 1
+    while s in taken:
+        n += 1
+        s = "%s-%d" % (base, n)
+    taken.add(s)
+    return s
+
+
+def add_tabs(out):
+    """Put the <h2> sections behind a tab row sitting under the race header.
+
+    Like add_expand_all, this belongs to the rendered page and not to report.md,
+    which stays one linear Markdown document that GitHub and the VS Code preview
+    render correctly. Only the browser copy is paginated, and the Debrief is
+    still the first thing open, because it is still the first section.
+
+    The trailing rule and provenance line are lifted out of the last section
+    first. They describe the whole report, so a reader should not have to guess
+    which tab to open to find out which replay it came from.
+
+    Sections are delimited by <h2>, the same delimiter add_expand_all uses, so
+    the two agree about what a section is by construction. Run this AFTER it:
+    the label is taken from the text before the expand-all button, which leaves
+    the button in the panel with the disclosures it opens.
+    """
+    heads = [i for i, ln in enumerate(out) if ln.startswith("<h2>")]
+    if len(heads) < 2:
+        return out                       # one section is not a set of tabs
+
+    end = len(out)
+    for i in range(len(out) - 1, heads[-1], -1):
+        if out[i] == "<hr>":
+            end = i
+            break
+
+    labels, ids, taken = [], [], set()
+    for i in heads:
+        inner = out[i][len("<h2>"):out[i].rindex("</h2>")].split("<button")[0]
+        # Already escaped upstream by md_inline, so strip tags and the one
+        # entity that would otherwise read as a word, and do not escape twice.
+        label = re.sub(r"<[^>]+>", "", inner).replace("&nbsp;", " ").strip()
+        labels.append(label)
+        ids.append(slugify(re.sub(r"&[a-z]+;", " ", label), taken))
+
+    nav = ['<nav class="tabs" role="tablist" aria-label="Report sections">']
+    nav += ['<button class="tab" type="button" role="tab" id="tab-%s" data-panel="%s" '
+            'aria-controls="%s" aria-selected="false" tabindex="-1">%s</button>'
+            % (i, i, i, lb) for i, lb in zip(ids, labels)]
+    nav += ["</nav>"]
+
+    new = out[:heads[0]] + nav
+    for j, i in enumerate(heads):
+        stop = heads[j + 1] if j + 1 < len(heads) else end
+        new += ['<section class="panel" id="%s" role="tabpanel" aria-labelledby="tab-%s">'
+                % (ids[j], ids[j])]
+        new += out[i:stop]
+        new += ["</section>"]
+    return new + out[end:]
 
 
 ALIGN_RE = re.compile(r"^:?-{3,}:?$")
@@ -1332,12 +1458,15 @@ def md_to_html(md, title):
             para.append(st)
     flush_para()
     flush_table()
-    out = add_expand_all(out)
+    out = add_tabs(add_expand_all(out))
+    # The .js flag is set in <head>, before the body paints, so the browser
+    # never shows the whole report for a frame and then collapses it to one tab.
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>%s</title><style>%s</style></head><body><main>%s</main>"
-            "<script>%s</script></body></html>"
-            % (esc(title), HTML_CSS, "\n".join(out), EXPAND_JS))
+            "<title>%s</title><script>document.documentElement.className='js'</script>"
+            "<style>%s</style></head><body><main>%s</main>"
+            "<script>%s</script><script>%s</script></body></html>"
+            % (esc(title), HTML_CSS, "\n".join(out), EXPAND_JS, TAB_JS))
 
 # ---------------------------------------------------------------------------
 

@@ -266,6 +266,13 @@ generated sentence can say a number is large, but only a person knows whether
 the pilot was already told about it last session, which is the whole difference
 between coaching and nagging.
 
+`report.html` opens in the browser when it is written, unless `--no-auto-open`
+is passed. Anything that writes the Debrief afterwards should pass it and open
+the report itself: the automatic open fires at write time, so on a fresh report
+it shows a page whose headline reads "TO BE WRITTEN", and the regeneration that
+fills the Debrief in does not refresh that tab. `--no-open` is the older
+spelling of the same flag.
+
 The stub does scaffold the shape — an assessment, then a `### Recommendations`
 subsection holding every instruction — because a debrief that mixes the two ends
 up praising instead of instructing. `existing_debrief()` carries a hand-written

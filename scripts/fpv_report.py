@@ -35,15 +35,21 @@ Usage
   python fpv_report.py replays/<archived-replay>.xml
   python fpv_report.py <replay.xml> -o reports --no-anim
   python fpv_report.py <replay.xml> --laps "732:1879,1879:3056"
-  python fpv_report.py --latest --no-open
+  python fpv_report.py --latest --no-auto-open
 
 Lap ranges come from the replay metadata automatically; --laps only overrides
 them, for an abandoned attempt worth splitting by hand.
 
 report.html opens in the default browser once it is written, because the report
-is the deliverable and a path printed to a terminal is not one. --no-open
-suppresses that, which is what a batch run wants, or an agent regenerating the
-same report several times to hand-write the Debrief.
+is the deliverable and a path printed to a terminal is not one.
+
+--no-auto-open suppresses that. Pass it whenever the Debrief is going to be
+written after this run - which is every run a coach or an agent makes - and open
+the report yourself once it says something. The automatic open fires when the
+file is WRITTEN, so on a fresh report it puts a page reading "TO BE WRITTEN" in
+front of the reader, and the regeneration that fills the Debrief in does not
+refresh that tab. A batch run wants the flag too. --no-open is the older
+spelling and still works.
 """
 
 import argparse
@@ -1482,8 +1488,10 @@ def main():
                          "without it, an existing Debrief is carried forward")
     ap.add_argument("--no-html", action="store_true",
                     help="skip report.html, the double-clickable copy of report.md")
-    ap.add_argument("--no-open", action="store_true",
-                    help="do not open report.html in the default browser")
+    ap.add_argument("--no-auto-open", "--no-open", action="store_true", dest="no_open",
+                    help="do not open report.html; pass this when you will open the "
+                         "finished report yourself, after the Debrief is written "
+                         "(--no-open is the older spelling of the same flag)")
     ap.add_argument("--no-anim", action="store_true", help="skip the animated figures")
     ap.add_argument("--anim-max", type=float, default=40.0,
                     help="longest animation loop, seconds; anything longer is sped up and "

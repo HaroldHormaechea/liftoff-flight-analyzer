@@ -177,9 +177,18 @@ It does scaffold the shape, in two halves:
   what lets the body above stay assessment, and it is the part a pilot rereads
   before the next session.
 
-Edit `report.md`, write that section, then re-run the script so `report.html`
-picks it up — with `--no-open`, since the pilot already has the page. An existing
-debrief is carried forward on every regeneration, so nothing is lost.
+**Pass `--no-auto-open` on every run, and open the report yourself at the end.**
+The automatic open fires when the file is written, which is before this section
+exists, so it shows the pilot a page whose headline reads "TO BE WRITTEN" — and
+the regeneration that fills the Debrief in does not refresh that tab. The order
+that works:
+
+1. Generate with `--no-auto-open`. There is nothing to read yet.
+2. Read `analysis.json` and write the Debrief into `report.md`.
+3. Regenerate with `--no-auto-open` so `report.html` picks it up.
+4. Open `report.html` yourself.
+
+An existing debrief is carried forward on every regeneration, so nothing is lost.
 
 Read the pilot profile and whatever notes it points to first. Repeating advice
 they have already absorbed reads as not having watched the flight, and the value

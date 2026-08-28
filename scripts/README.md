@@ -266,6 +266,12 @@ generated sentence can say a number is large, but only a person knows whether
 the pilot was already told about it last session, which is the whole difference
 between coaching and nagging.
 
+The stub does scaffold the shape — an assessment, then a `### Recommendations`
+subsection holding every instruction — because a debrief that mixes the two ends
+up praising instead of instructing. `existing_debrief()` carries a hand-written
+Debrief forward across regenerations and stops at the next `## ` heading, so the
+`###` subsection travels with it.
+
 ### Figures
 
 | figure | what it answers |

@@ -914,10 +914,15 @@ def findings(meta, report, names, pb):
     return out
 
 
-DEBRIEF_STUB = ("<!-- Written by hand after reading the figures. One fault, one drill, "
-                "no stacking. Read the pilot's notes file first, so this does not "
-                "repeat advice already given and absorbed. Delete this comment when "
-                "filled in. -->\n\n_TO BE WRITTEN._")
+DEBRIEF_STUB = ("<!-- Written by hand after reading the figures. Read the pilot's notes "
+                "file first, so this does not repeat advice already given and absorbed. "
+                "Above the Recommendations heading goes the assessment: what happened, "
+                "what it means, and what is still wrong - a result that went well is "
+                "reported in the same register as one that did not. Below it go the "
+                "instructions, numbered. One fault, one drill, no stacking. Delete this "
+                "comment when filled in. -->"
+                "\n\n_TO BE WRITTEN._"
+                "\n\n### Recommendations\n\n_TO BE WRITTEN._")
 
 
 def existing_debrief(path):

@@ -8,15 +8,21 @@
 
 ## Debrief
 
-**This is the run of the session, and the reason is measurable: 26.18 / 26.83 / 27.93, and zero seconds below 20 km/h in any of the three laps.** Not "a bit less slow time" — the 0–20 km/h band is simply absent from all three laps. Zero stalls. Zero seconds under 10 km/h. Three skidded corners out of 33, against 18 out of 41 in the 13:25 attempt.
+Three timed laps on Stuff That Works: 26.18 / 26.83 / 27.93, spread 1.75 s. Zero stalls, zero seconds under 10 km/h, and **no 0-20 km/h band in any of the three laps**. Three skidded corners of 33, against 18 of 41 in the 13:25 attempt on the same track.
 
-That is the standing drill, executed. And the rest of the day is the control group. Across the twelve Bardwells Yard laps you flew today, **the four laps with no time under 20 km/h are the four fastest laps of the day on this track.** Every lap that dipped below 20 got slower, and got slower in the same order every time: speed goes, yaw-only time climbs (up to 30–32% on the bad laps, 9–12% here), stalls appear, lap time follows. The lap-to-lap decay that has been an open question is not stamina. It is one dip under 20 km/h and the lap unravelling from there.
+The standing drill - never below 20 km/h - was held for a full race unprompted. The rest of the day is the control group for it: across the twelve Bardwells Yard laps flown today, the four laps with zero time under 20 km/h are the four fastest. Every lap that dipped below 20 degraded in the same order - speed falls, yaw-only share climbs to 30-32%, stalls appear, lap time follows.
 
-Also: the "throttle sets the magnitude" thing is done. 23 of 33 corners gained throttle, 18 of 33 exited faster than they entered, and you are not being told about it again.
+That closes lap-to-lap decay as a separate fault. It is not stamina; three laps within 1.75 s of each other rule that out. It is one dip under 20 km/h and the lap unravelling from there.
 
-**The one thing to fix: you can hold the floor on a track you know, and you drop it on a track you don't.** The 15:03 Nineteenth Hole run has 42.5 s under 20 km/h in a single lap. You raced a brand-new circuit cold instead of learning it first.
+Throttle discipline through corners is established and needs no further attention: 23 of 33 corners gained throttle, 18 of 33 exited faster than they entered.
 
-**Drill:** on any new track, three laps with the clock ignored and one rule — never below 20 km/h, wide exits are free. Only then save a race. Learn the line at speed, not at walking pace.
+The limitation this run exposes is transfer. The floor holds on a known track and is dropped on an unknown one - the 15:03 Nineteenth Hole run contains 42.5 s under 20 km/h in a single lap, flown as a race on a circuit seen for the first time.
+
+### Recommendations
+
+1. **On any new track, fly three laps with the clock ignored** and one rule: never below 20 km/h. Wide exits are free. Only then save a race.
+2. **Keep the 20 km/h floor as the scored metric**, not lap time. It is the variable that moves the lap time.
+3. **Save the fast runs.** Liftoff holds a 0:22.350 lap here with no replay for it; the reviewed recordings are the slower attempts.
 
 ## Data analysis
 
@@ -133,4 +139,4 @@ Every lap on one map, each a different colour. Where the laps separate is a LINE
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 18:09 by `fpv_report.py`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 18:41 by `fpv_report.py`

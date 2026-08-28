@@ -164,6 +164,19 @@ depends on what the pilot has already been told and the script does not know
 that. A generated sentence can say a number is large, but only a person knows
 whether it is news.
 
+It does scaffold the shape, in two halves:
+
+- **The assessment**, above the heading. What happened, what it means, and what
+  is still wrong. Report a result that went well in the same register as one that
+  did not — name it, give the number, move on — and keep assessing afterwards,
+  because a flight with a good headline still has faults in it. Cut any sentence
+  that is not a measurement, a cause or an instruction; use a table wherever the
+  data is tabular.
+- **`### Recommendations`**, at the end. Numbered, terse, actionable: drills to
+  fly, changes to make, things to stop doing. Putting every instruction here is
+  what lets the body above stay assessment, and it is the part a pilot rereads
+  before the next session.
+
 Edit `report.md`, write that section, then re-run the script so `report.html`
 picks it up — with `--no-open`, since the pilot already has the page. An existing
 debrief is carried forward on every regeneration, so nothing is lost.

@@ -88,7 +88,6 @@ transition:color .12s,background .12s,border-color .12s}
 <button class="tab" type="button" role="tab" id="tab-debrief" data-panel="debrief" aria-controls="debrief" aria-selected="false" tabindex="-1">Debrief</button>
 <button class="tab" type="button" role="tab" id="tab-data-analysis" data-panel="data-analysis" aria-controls="data-analysis" aria-selected="false" tabindex="-1">Data analysis</button>
 <button class="tab" type="button" role="tab" id="tab-lap-times" data-panel="lap-times" aria-controls="lap-times" aria-selected="false" tabindex="-1">Lap times</button>
-<button class="tab" type="button" role="tab" id="tab-circuit-path" data-panel="circuit-path" aria-controls="circuit-path" aria-selected="false" tabindex="-1">Circuit path</button>
 <button class="tab" type="button" role="tab" id="tab-flight-playback" data-panel="flight-playback" aria-controls="flight-playback" aria-selected="false" tabindex="-1">Flight playback</button>
 <button class="tab" type="button" role="tab" id="tab-numbers" data-panel="numbers" aria-controls="numbers" aria-selected="false" tabindex="-1">Numbers</button>
 </nav>
@@ -111,26 +110,6 @@ transition:color .12s,background .12s,border-color .12s}
 <h2>Lap times</h2>
 <img src="assets/timeline.svg" alt="Lap times">
 </section>
-<section class="panel" id="circuit-path" role="tabpanel" aria-labelledby="tab-circuit-path">
-<h2>Circuit path<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
-<details>
-<summary>Lap 1</summary>
-<img src="assets/track_lap1.svg" alt="lap 1">
-</details>
-<details>
-<summary>Lap 2</summary>
-<img src="assets/track_lap2.svg" alt="lap 2">
-</details>
-<details>
-<summary>Lap 3</summary>
-<img src="assets/track_lap3.svg" alt="lap 3">
-</details>
-<details>
-<summary>Laps overlaid</summary>
-<img src="assets/line.svg" alt="Laps overlaid">
-<p>Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.</p>
-</details>
-</section>
 <section class="panel" id="flight-playback" role="tabpanel" aria-labelledby="tab-flight-playback">
 <h2>Flight playback<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
 <p>The dashed ray is where the quad is <em>going</em>. The arrow is where it is <em>pointing</em>. When they separate, that gap is sideslip: the quad is travelling sideways and the camera is not saying so. The follow cam is the same flight magnified, because at whole-lap scale the gap is a few pixels wide.</p>
@@ -145,6 +124,11 @@ transition:color .12s,background .12s,border-color .12s}
 <details>
 <summary>Lap 3</summary>
 <img src="assets/anim_lap3.svg" alt="lap 3">
+</details>
+<details>
+<summary>Laps overlaid</summary>
+<img src="assets/line.svg" alt="Laps overlaid">
+<p>Every lap on one map, each a different colour. Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.</p>
 </details>
 </section>
 <section class="panel" id="numbers" role="tabpanel" aria-labelledby="tab-numbers">
@@ -164,7 +148,7 @@ transition:color .12s,background .12s,border-color .12s}
 </details>
 </section>
 <hr>
-<p>Replay <code>20260828-140705_BardwellsYard_Race_3lap.xml</code> · samples in <code>flight.csv</code> · <strong>full analysis, including everything not drawn above, in <code>analysis.json</code></strong> · generated 2026-08-28 17:51 by <code>fpv_report.py</code></p></main><script>
+<p>Replay <code>20260828-140705_BardwellsYard_Race_3lap.xml</code> · samples in <code>flight.csv</code> · <strong>full analysis, including everything not drawn above, in <code>analysis.json</code></strong> · generated 2026-08-28 18:09 by <code>fpv_report.py</code></p></main><script>
 for (const b of document.querySelectorAll('.xall')) {
   b.addEventListener('click', () => {
     const want = b.getAttribute('data-open') !== '1';

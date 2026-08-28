@@ -334,12 +334,6 @@ def pin(x, y, label, colour="var(--warn)", r=8.5):
             + txt(x, y + 3.4, label, 9.5, "", "middle", 'fill="#ffffff" font-weight="700"'))
 
 
-def quad_glyph(angle, scale=1.0, fill="var(--fg)"):
-    return ('<g transform="rotate(%s) scale(%s)"><path d="M0,-13 L8,9 L0,4.5 L-8,9 Z" '
-            'fill="%s" stroke="var(--halo)" stroke-width="1.4"/></g>'
-            % (n(angle, 1), n(scale, 2), fill))
-
-
 def legend_speed(x, y, vref, w=210, label="speed"):
     """The key for the speed ramp the paths are drawn with.
 
@@ -354,48 +348,6 @@ def legend_speed(x, y, vref, w=210, label="speed"):
             + txt(x, y - 5, label, 9.5, "mut")
             + txt(x, y + 20, "0", 9.5, "mut")
             + txt(x + w, y + 20, "%d+ km/h" % round(vref), 9.5, "mut", "end"))
-
-
-def fig_track(data, ranges, names, report, vref, out, title):
-    W = 960
-    bounds = bounds_of(data)
-    wide = (bounds[1] - bounds[0]) > 1.3 * (bounds[3] - bounds[2])
-    cols = 1 if (wide or len(ranges) == 1) else 2
-    pw = W // cols
-    ph = fit_height(bounds, pw) + 46
-    rows = (len(ranges) + cols - 1) // cols
-    H = 44 + rows * ph + 56
-    body = [txt(14, 26, title, 15, "ttl")]
-    for k, (a, b) in enumerate(ranges):
-        cx, cy = (k % cols) * pw, 44 + (k // cols) * ph
-        pr = Proj(None, cx, cy + 40, pw, ph - 46, bounds=bounds)
-        seg = data[a:b]
-        e = report[k] if k < len(report) else {}
-        body.append(panel(cx + 5, cy + 4, pw - 10, ph - 12))
-        body.append(txt(cx + 16, cy + 24, names[k].upper(), 12, "ttl"))
-        # SVG has no text metrics here, so the stats line is offset by an
-        # estimated advance width. A fixed offset fitted "LAP 1" and collided
-        # with "AFTER LAP 1" the moment untimed segments were added.
-        body.append(txt(cx + 30 + 7.6 * len(names[k]), cy + 24, SEP.join(
-            ["%.1f s" % e.get("duration_s", 0),
-             "median %d km/h" % e.get("speed_median", 0),
-             "%.1f s under 10" % e.get("slow_seconds", 0)]), 10.5, "mut"))
-        body.append(poly([pr(s) for s in data], "var(--grid)", 1.4))   # rest of the flight
-        body.append(speed_path(seg, pr, vref))
-        sx, sy = pr(seg[0])
-        body.append('<g transform="translate(%s,%s)">%s</g>'
-                    % (n(sx, 1), n(sy, 1), quad_glyph(seg[0]["nose"], 0.85)))
-        for i, st in enumerate(e.get("stalls", []), 1):
-            s0, s1 = st["index"]
-            deep = min(range(s0, s1 + 1), key=lambda j: data[j]["spd"])
-            dx, dy = pr(data[deep])
-            body.append(pin(dx, dy, str(i)))
-        body.append(scale_bar(pr, cx + 24, cy + ph - 24))
-    body.append(legend_speed(16, H - 36, vref))
-    body.append(txt(W - 14, H - 20, SEP.join(
-        ["arrow = start", "numbered pins = stalls", "grey = the rest of the flight"]),
-        10, "mut", "end"))
-    write(out, doc(W, H, "".join(body), title))
 
 
 def fig_line(data, ranges, names, out, title):
@@ -1054,28 +1006,31 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
     L += ["## Lap times", "", "![Lap times](%s)" % rel(figs["timeline"]), ""]
 
     # One entry per lap and nothing called "all". A combined figure sitting as a
-    # sibling of the laps it combines reads as a fourth lap; the way to see
+    # sibling of the laps it combines reads as one more lap; the way to see
     # everything is the expand-all control on the heading, which the HTML adds
     # automatically to any section holding more than one disclosure.
-    L += ["## Circuit path", ""]
-    for k, p in sorted(figs.get("track_each", {}).items()):
-        L += details(names[k].capitalize(), ["![%s](%s)" % (names[k], rel(p)), ""])
-    if "line" in figs:
-        L += details("Laps overlaid",
-                     ["![Laps overlaid](%s)" % rel(figs["line"]), "",
-                      "Where the laps separate is a LINE difference. No change of stick "
-                      "technique moves a line - only knowing the track does.", ""])
-
-    if anims.get("laps"):
-        L += ["## Flight playback", "",
-              "The dashed ray is where the quad is *going*. The arrow is where it is "
-              "*pointing*. When they separate, that gap is sideslip: the quad is "
-              "travelling sideways and the camera is not saying so. The follow cam is "
-              "the same flight magnified, because at whole-lap scale the gap is a few "
-              "pixels wide.", ""]
-        for k, (path, rate) in enumerate(anims["laps"]):
+    #
+    # The overlay is the exception, and it earns it by answering a different
+    # question: not "how did this lap go" but "where did the LINE move between
+    # laps". It sits here because a static map of every lap at once is the one
+    # thing the playback cannot show - the playback is always one lap.
+    if anims.get("laps") or "line" in figs:
+        L += ["## Flight playback", ""]
+        if anims.get("laps"):
+            L += ["The dashed ray is where the quad is *going*. The arrow is where it is "
+                  "*pointing*. When they separate, that gap is sideslip: the quad is "
+                  "travelling sideways and the camera is not saying so. The follow cam is "
+                  "the same flight magnified, because at whole-lap scale the gap is a few "
+                  "pixels wide.", ""]
+        for k, (path, rate) in enumerate(anims.get("laps", [])):
             L += details(names[k].capitalize(),
                          ["![%s](%s)" % (names[k], rel(path)), ""])
+        if "line" in figs:
+            L += details("Laps overlaid",
+                         ["![Laps overlaid](%s)" % rel(figs["line"]), "",
+                          "Every lap on one map, each a different colour. Where the laps "
+                          "separate is a LINE difference. No change of stick technique "
+                          "moves a line - only knowing the track does.", ""])
 
     L += ["## Numbers", ""]
     rows = [[names[k], "%.1f" % e["duration_s"], e["speed_median"], e["speed_p90"],
@@ -1614,15 +1569,9 @@ def main():
 
     fig_timeline(data, ranges, names, report, figs["timeline"], "Lap times",
                  best_lap=pb.get("best_lap"), lap_times=meta.get("lap_times"))
-    # One figure per segment, never a combined multi-panel one: the report shows
-    # them one disclosure at a time, and a panel grid nobody embeds is a file
-    # that goes stale without anyone noticing.
-    figs["track_each"] = {}
-    for k in range(len(ranges)):
-        p = assets / ("track_%s.svg" % names[k].replace(" ", ""))
-        fig_track(data, [ranges[k]], [names[k]], [report[k]], vref, p,
-                  "%s - circuit path, coloured by speed" % names[k].capitalize())
-        figs["track_each"][k] = p
+    # There is no per-lap track figure. It drew the same path, in the same speed
+    # colours, as the overview map inside that lap's own playback animation, and
+    # a report that shows one flight twice teaches the reader to skim.
     if len(ranges) > 1:
         figs["line"] = assets / "line.svg"
         fig_line(data, ranges, names, figs["line"], "Laps overlaid")

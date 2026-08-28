@@ -56,14 +56,21 @@ never has to guess which threshold produced a number.
 
 ### Section order
 
-Header, **Debrief**, **Data analysis**, **Lap times**, **Circuit path**,
-**Flight playback**, **Numbers**, then everything else collapsed. The debrief
+Header, **Debrief**, **Data analysis**, **Lap times**, **Flight playback**,
+**Numbers**, then everything else collapsed. The debrief
 leads because it is the answer, and everything after it is the evidence for the
 answer — which only gets read when the answer provokes a question.
 
-Circuit path and Flight playback hold one collapsed entry per lap. Disclosure
-uses plain `<details>`, so one construct works in the `.md`, in the generated
-`.html`, in the VS Code preview and on GitHub, with no JavaScript.
+Flight playback holds one collapsed entry per lap, plus `line.svg` as a last
+entry. Disclosure uses plain `<details>`, so one construct works in the `.md`, in
+the generated `.html`, in the VS Code preview and on GitHub, with no JavaScript.
+
+There is no per-lap track figure. It drew the same path in the same speed colours
+as the overview map inside that lap's own animation, and a report that shows one
+flight twice teaches the reader to skim. `line.svg` survives the same cull
+because it answers a different question — where the *line* moved between laps —
+and it is the one thing the playback cannot show, the playback being always one
+lap.
 
 ### Tabs, in the HTML only
 
@@ -264,7 +271,6 @@ between coaching and nagging.
 | figure | what it answers |
 |---|---|
 | `timeline.svg` | lap bars, stalls in red, against the best ever lap on that track |
-| `track_<segment>.svg` | one per lap: the line coloured by speed, stalls pinned |
 | `line.svg` | laps overlaid — a line difference, which no stick technique fixes |
 | `traces.svg` | speed, sideslip and throttle on one clock, stalls banded |
 | `traces_extra.svg` | tilt and the stick inputs — collapsed in the report |
@@ -272,10 +278,12 @@ between coaching and nagging.
 | `anim_<segment>.svg` | one per lap: the lap played back, with a follow cam |
 | `anim_stall_*.svg` | each stall played back, ±4 s of context |
 
-There is deliberately **no combined multi-panel track figure and no whole-flight
-animation**. A figure that merges the laps, sitting in a list beside the laps it
-merges, reads as one more lap; the way to see everything at once is the
-expand-all control, not another entry. Do not add them back.
+There is deliberately **no per-lap track figure, no combined multi-panel track
+figure and no whole-flight animation**. A figure that merges the laps, sitting in
+a list beside the laps it merges, reads as one more lap; the way to see
+everything at once is the expand-all control, not another entry. `line.svg` is
+not an exception to that — it merges nothing, it compares. Do not add the others
+back.
 
 ### Everything is standard library
 

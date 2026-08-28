@@ -29,38 +29,6 @@ Also: the "throttle sets the magnitude" thing is done. 23 of 33 corners gained t
 
 ![Lap times](assets/timeline.svg)
 
-## Circuit path
-
-<details>
-<summary>Lap 1</summary>
-
-![lap 1](assets/track_lap1.svg)
-
-</details>
-
-<details>
-<summary>Lap 2</summary>
-
-![lap 2](assets/track_lap2.svg)
-
-</details>
-
-<details>
-<summary>Lap 3</summary>
-
-![lap 3](assets/track_lap3.svg)
-
-</details>
-
-<details>
-<summary>Laps overlaid</summary>
-
-![Laps overlaid](assets/line.svg)
-
-Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.
-
-</details>
-
 ## Flight playback
 
 The dashed ray is where the quad is *going*. The arrow is where it is *pointing*. When they separate, that gap is sideslip: the quad is travelling sideways and the camera is not saying so. The follow cam is the same flight magnified, because at whole-lap scale the gap is a few pixels wide.
@@ -83,6 +51,15 @@ The dashed ray is where the quad is *going*. The arrow is where it is *pointing*
 <summary>Lap 3</summary>
 
 ![lap 3](assets/anim_lap3.svg)
+
+</details>
+
+<details>
+<summary>Laps overlaid</summary>
+
+![Laps overlaid](assets/line.svg)
+
+Every lap on one map, each a different colour. Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.
 
 </details>
 
@@ -156,4 +133,4 @@ The dashed ray is where the quad is *going*. The arrow is where it is *pointing*
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 17:51 by `fpv_report.py`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 18:09 by `fpv_report.py`

@@ -80,8 +80,8 @@ list naming what was left out and where it lives instead. Never re-derive from
 `flight.csv` what is already sitting in there.
 
 Report structure, in reading order: a compact header, then **Debrief**, **Data
-analysis**, **Lap times**, **Circuit path**, **Flight playback**, **Numbers**,
-then everything else collapsed. The debrief leads because it is the answer, and
+analysis**, **Lap times**, **Flight playback**, **Numbers**, then everything else
+collapsed. The debrief leads because it is the answer, and
 everything after it is the evidence — which only gets read when the answer
 provokes a question.
 
@@ -116,15 +116,19 @@ debrief instead of carrying it forward.
 - **Lap times** — lap bars with the stalls marked in red, against the pilot's
   best ever lap on that track. Says immediately whether the deficit is pace or
   stops.
-- **Circuit path** — the track coloured by speed, one collapsed figure per lap,
-  stalls pinned. Where the time is lost, geographically. The overlay shows
-  lap-to-lap line differences, which no change of stick technique can fix. There
-  is deliberately no combined "all laps" entry: a merged figure listed beside the
-  laps it merges reads as one more lap. Seeing everything at once is the
-  expand-all control the HTML puts on any section with two or more disclosures.
 - **Flight playback** — nose arrow versus dashed direction-of-travel ray. The
   angle between them is the sideslip, and the arrow turns red past 30 degrees.
-  The stall clips are where a fault becomes visible rather than tabulated.
+  The overview map behind the quad is the lap coloured by speed, so this is also
+  where the time is lost geographically. The stall clips are where a fault
+  becomes visible rather than tabulated. The last entry, **Laps overlaid**, is
+  the one still figure in the section: every lap on one map in its own colour,
+  showing lap-to-lap line differences, which no change of stick technique can
+  fix. It is there because it answers a question the playback cannot — the
+  playback is always one lap.
+  There is deliberately no combined "all laps" *animation*: a merged figure
+  listed beside the laps it merges reads as one more lap. Seeing everything at
+  once is the expand-all control the HTML puts on any section with two or more
+  disclosures.
 - **Traces** — speed, sideslip and throttle on one clock, stalls banded. Tilt and
   the stick traces are a second figure, collapsed; open it when the question is
   about inputs rather than results.

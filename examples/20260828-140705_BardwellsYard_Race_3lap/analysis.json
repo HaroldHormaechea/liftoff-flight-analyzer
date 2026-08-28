@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-28T17:51:56",
+  "generated": "2026-08-28T18:09:02",
   "source_replay": "fpv-drone\\replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
   "race_name": "03 - Stuff That Works",
   "meta": {
@@ -623,11 +623,6 @@
     "csv": "flight.csv",
     "timeline": "assets/timeline.svg",
     "traces": "assets/traces.svg",
-    "track_each": {
-      "0": "assets/track_lap1.svg",
-      "1": "assets/track_lap2.svg",
-      "2": "assets/track_lap3.svg"
-    },
     "line": "assets/line.svg",
     "traces_extra": "assets/traces_extra.svg",
     "corners": "assets/corners.svg"

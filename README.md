@@ -64,14 +64,13 @@ you curious:
 
 - **Lap times** — your laps as bars with the slow spots marked in red, against
   your best ever lap on that track.
-- **Circuit path** — the track drawn from your own flight and coloured by speed,
-  so you can see *where* the time went, with the laps overlaid to show where your
-  line moved.
-- **Flight playback** — your lap animated. A solid arrow shows where the quad was
-  *pointing* and a dashed ray where it was actually *going*; when they separate,
-  you are travelling sideways and the camera is not telling you. Every slow spot
-  gets its own short clip, magnified, which is usually the moment a fault stops
-  being an abstraction.
+- **Flight playback** — your lap animated on the track drawn from your own
+  flight and coloured by speed, so you can see *where* the time went. A solid
+  arrow shows where the quad was *pointing* and a dashed ray where it was
+  actually *going*; when they separate, you are travelling sideways and the
+  camera is not telling you. Every slow spot gets its own short clip, magnified,
+  which is usually the moment a fault stops being an abstraction. Beside them,
+  one still map with every lap overlaid, to show where your line moved.
 - **Numbers** — speed, sideslip and throttle traces, per-corner tables, and the
   stall analysis, with the reference material tucked into collapsible sections.
 

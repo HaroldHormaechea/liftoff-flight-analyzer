@@ -1,0 +1,648 @@
+{
+  "generated": "2026-08-28T17:43:41",
+  "source_replay": "fpv-drone\\replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
+  "race_name": "03 - Stuff That Works",
+  "meta": {
+    "name": "03 - Stuff That Works - 01_20_953 - 2026-08-28",
+    "environment": "BardwellsYard",
+    "gamemode": "Race",
+    "modifiers": "DisableGodMode EnableCameraNoise",
+    "crashed": false,
+    "created": "20260828.140705",
+    "total_time": 80.95347,
+    "lap_times": [
+      26.183815,
+      26.833971,
+      27.934248
+    ],
+    "lap_start_indices": [
+      42,
+      304,
+      572
+    ],
+    "track_id": "f8c36a5c-d79e-4488-affb-2f236f407347",
+    "race_id": "6030ba91-1e3d-4c53-97ee-3c628979571e",
+    "drone": "Borrum 180 X (Tutorial)",
+    "samples": 852,
+    "game_version": "1.7.5"
+  },
+  "sample_rate_hz": 9.99,
+  "sample_interval_s": 0.100098,
+  "speed_ref_kmh": 67.54,
+  "speed_ref_note": "p90 speed; the figures' colour ramp saturates here",
+  "thresholds": {
+    "laps": null,
+    "turn_threshold": 25,
+    "speed_floor": 15,
+    "min_samples": 5,
+    "json": false,
+    "trace": false,
+    "no_stalls": false,
+    "stall_speed": 10,
+    "stall_min": 0.5,
+    "stall_gap": 1.0,
+    "idle_throttle": 0.05,
+    "lead": 1.5,
+    "pre_window": 4.0,
+    "post_window": 4.5,
+    "history_window": 15.0,
+    "retrace_exclude": 3.0,
+    "probe_half_window": 2.5,
+    "retrace_m": 3.0,
+    "reversal_deg": 120,
+    "near_m": 15.0,
+    "corner_deg": 30,
+    "offline_m": 8.0,
+    "yaw_on": 0.2,
+    "roll_off": 0.05
+  },
+  "segments_index": [
+    {
+      "name": "lap 1",
+      "start_index": 42,
+      "end_index": 304,
+      "start_t": 4374.536,
+      "end_t": 4400.71,
+      "lap_time": 26.183815,
+      "timed_lap": true
+    },
+    {
+      "name": "lap 2",
+      "start_index": 304,
+      "end_index": 572,
+      "start_t": 4400.72,
+      "end_t": 4427.51,
+      "lap_time": 26.833971,
+      "timed_lap": true
+    },
+    {
+      "name": "lap 3",
+      "start_index": 572,
+      "end_index": 851,
+      "start_t": 4427.554,
+      "end_t": 4455.41,
+      "lap_time": 27.934248,
+      "timed_lap": true
+    }
+  ],
+  "segments": [
+    {
+      "segment": "lap 1",
+      "duration_s": 26.2,
+      "speed_median": 52,
+      "speed_p90": 68,
+      "speed_max": 82,
+      "tilt_median": 40,
+      "tilt_p90": 74,
+      "sideslip_median": 15.4,
+      "sideslip_p90": 32.8,
+      "sideslip_samples": 262,
+      "throttle_median": 0.67,
+      "slow_seconds": 0.0,
+      "corners": [
+        {
+          "t": 2.5,
+          "entry_kmh": 62,
+          "min_kmh": 57,
+          "exit_kmh": 57,
+          "tilt_deg": 48,
+          "sideslip_deg": 6.2,
+          "radius_m": 21.1,
+          "throttle_in": 0.66,
+          "throttle_mid": 0.71,
+          "throttle_delta": 0.06
+        },
+        {
+          "t": 3.4,
+          "entry_kmh": 50,
+          "min_kmh": 49,
+          "exit_kmh": 73,
+          "tilt_deg": 82,
+          "sideslip_deg": 23.4,
+          "radius_m": 12.0,
+          "throttle_in": 0.6,
+          "throttle_mid": 0.89,
+          "throttle_delta": 0.29
+        },
+        {
+          "t": 4.3,
+          "entry_kmh": 79,
+          "min_kmh": 46,
+          "exit_kmh": 46,
+          "tilt_deg": 57,
+          "sideslip_deg": 21.3,
+          "radius_m": 16.1,
+          "throttle_in": 0.96,
+          "throttle_mid": 0.85,
+          "throttle_delta": -0.11
+        },
+        {
+          "t": 9.0,
+          "entry_kmh": 49,
+          "min_kmh": 35,
+          "exit_kmh": 35,
+          "tilt_deg": 35,
+          "sideslip_deg": 40.5,
+          "radius_m": 18.0,
+          "throttle_in": 0.59,
+          "throttle_mid": 0.57,
+          "throttle_delta": -0.02
+        },
+        {
+          "t": 10.4,
+          "entry_kmh": 31,
+          "min_kmh": 25,
+          "exit_kmh": 33,
+          "tilt_deg": 55,
+          "sideslip_deg": 26.5,
+          "radius_m": 5.5,
+          "throttle_in": 0.5,
+          "throttle_mid": 0.64,
+          "throttle_delta": 0.14
+        },
+        {
+          "t": 11.5,
+          "entry_kmh": 43,
+          "min_kmh": 43,
+          "exit_kmh": 53,
+          "tilt_deg": 47,
+          "sideslip_deg": 7.8,
+          "radius_m": 17.4,
+          "throttle_in": 0.82,
+          "throttle_mid": 0.74,
+          "throttle_delta": -0.08
+        },
+        {
+          "t": 14.6,
+          "entry_kmh": 42,
+          "min_kmh": 33,
+          "exit_kmh": 35,
+          "tilt_deg": 48,
+          "sideslip_deg": 16.2,
+          "radius_m": 12.8,
+          "throttle_in": 0.58,
+          "throttle_mid": 0.59,
+          "throttle_delta": 0.01
+        },
+        {
+          "t": 17.5,
+          "entry_kmh": 45,
+          "min_kmh": 45,
+          "exit_kmh": 52,
+          "tilt_deg": 48,
+          "sideslip_deg": 8.7,
+          "radius_m": 20.4,
+          "throttle_in": 0.9,
+          "throttle_mid": 0.76,
+          "throttle_delta": -0.14
+        },
+        {
+          "t": 20.2,
+          "entry_kmh": 71,
+          "min_kmh": 50,
+          "exit_kmh": 50,
+          "tilt_deg": 45,
+          "sideslip_deg": 16.2,
+          "radius_m": 27.9,
+          "throttle_in": 1.0,
+          "throttle_mid": 0.73,
+          "throttle_delta": -0.27
+        },
+        {
+          "t": 24.6,
+          "entry_kmh": 59,
+          "min_kmh": 59,
+          "exit_kmh": 82,
+          "tilt_deg": 65,
+          "sideslip_deg": 26.4,
+          "radius_m": 22.6,
+          "throttle_in": 0.69,
+          "throttle_mid": 0.8,
+          "throttle_delta": 0.11
+        }
+      ],
+      "yaw_only": {
+        "yaw_seconds": 7.6,
+        "yaw_only_seconds": 0.9,
+        "yaw_only_pct": 12,
+        "yaw_only_mean_kmh": 63.5,
+        "bands": [
+          {
+            "band": "20-35",
+            "seconds": 1.8,
+            "roll_p90": 0.66,
+            "yaw_p90": 0.31
+          },
+          {
+            "band": "35-max",
+            "seconds": 24.4,
+            "roll_p90": 0.62,
+            "yaw_p90": 0.43
+          }
+        ]
+      },
+      "stalls": []
+    },
+    {
+      "segment": "lap 2",
+      "duration_s": 26.8,
+      "speed_median": 52,
+      "speed_p90": 72,
+      "speed_max": 87,
+      "tilt_median": 47,
+      "tilt_p90": 60,
+      "sideslip_median": 18.0,
+      "sideslip_p90": 47.6,
+      "sideslip_samples": 268,
+      "throttle_median": 0.68,
+      "slow_seconds": 0.0,
+      "corners": [
+        {
+          "t": 1.7,
+          "entry_kmh": 60,
+          "min_kmh": 48,
+          "exit_kmh": 48,
+          "tilt_deg": 30,
+          "sideslip_deg": 16.4,
+          "radius_m": 22.5,
+          "throttle_in": 0.7,
+          "throttle_mid": 0.7,
+          "throttle_delta": -0.0
+        },
+        {
+          "t": 2.6,
+          "entry_kmh": 44,
+          "min_kmh": 43,
+          "exit_kmh": 53,
+          "tilt_deg": 47,
+          "sideslip_deg": 9.8,
+          "radius_m": 15.2,
+          "throttle_in": 0.53,
+          "throttle_mid": 0.7,
+          "throttle_delta": 0.17
+        },
+        {
+          "t": 5.7,
+          "entry_kmh": 44,
+          "min_kmh": 44,
+          "exit_kmh": 47,
+          "tilt_deg": 53,
+          "sideslip_deg": 15.2,
+          "radius_m": 15.3,
+          "throttle_in": 0.44,
+          "throttle_mid": 0.61,
+          "throttle_delta": 0.18
+        },
+        {
+          "t": 7.6,
+          "entry_kmh": 75,
+          "min_kmh": 75,
+          "exit_kmh": 78,
+          "tilt_deg": 52,
+          "sideslip_deg": 6.9,
+          "radius_m": 37.1,
+          "throttle_in": 0.92,
+          "throttle_mid": 0.89,
+          "throttle_delta": -0.03
+        },
+        {
+          "t": 8.8,
+          "entry_kmh": 64,
+          "min_kmh": 34,
+          "exit_kmh": 37,
+          "tilt_deg": 62,
+          "sideslip_deg": 31.1,
+          "radius_m": 11.5,
+          "throttle_in": 0.6,
+          "throttle_mid": 0.74,
+          "throttle_delta": 0.14
+        },
+        {
+          "t": 10.6,
+          "entry_kmh": 51,
+          "min_kmh": 51,
+          "exit_kmh": 55,
+          "tilt_deg": 44,
+          "sideslip_deg": 14.2,
+          "radius_m": 17.1,
+          "throttle_in": 0.9,
+          "throttle_mid": 0.81,
+          "throttle_delta": -0.09
+        },
+        {
+          "t": 11.5,
+          "entry_kmh": 45,
+          "min_kmh": 45,
+          "exit_kmh": 50,
+          "tilt_deg": 57,
+          "sideslip_deg": 9.4,
+          "radius_m": 21.1,
+          "throttle_in": 0.47,
+          "throttle_mid": 0.63,
+          "throttle_delta": 0.16
+        },
+        {
+          "t": 13.0,
+          "entry_kmh": 49,
+          "min_kmh": 33,
+          "exit_kmh": 49,
+          "tilt_deg": 49,
+          "sideslip_deg": 28.1,
+          "radius_m": 12.9,
+          "throttle_in": 0.57,
+          "throttle_mid": 0.68,
+          "throttle_delta": 0.1
+        },
+        {
+          "t": 16.1,
+          "entry_kmh": 60,
+          "min_kmh": 55,
+          "exit_kmh": 60,
+          "tilt_deg": 36,
+          "sideslip_deg": 7.7,
+          "radius_m": 20.2,
+          "throttle_in": 0.85,
+          "throttle_mid": 0.89,
+          "throttle_delta": 0.03
+        },
+        {
+          "t": 17.3,
+          "entry_kmh": 47,
+          "min_kmh": 45,
+          "exit_kmh": 56,
+          "tilt_deg": 76,
+          "sideslip_deg": 12.6,
+          "radius_m": 12.7,
+          "throttle_in": 0.36,
+          "throttle_mid": 0.75,
+          "throttle_delta": 0.39
+        },
+        {
+          "t": 19.8,
+          "entry_kmh": 57,
+          "min_kmh": 48,
+          "exit_kmh": 49,
+          "tilt_deg": 49,
+          "sideslip_deg": 16.6,
+          "radius_m": 15.2,
+          "throttle_in": 0.7,
+          "throttle_mid": 0.73,
+          "throttle_delta": 0.03
+        },
+        {
+          "t": 21.7,
+          "entry_kmh": 47,
+          "min_kmh": 47,
+          "exit_kmh": 56,
+          "tilt_deg": 53,
+          "sideslip_deg": 12.5,
+          "radius_m": 12.8,
+          "throttle_in": 0.52,
+          "throttle_mid": 0.8,
+          "throttle_delta": 0.28
+        },
+        {
+          "t": 24.2,
+          "entry_kmh": 38,
+          "min_kmh": 28,
+          "exit_kmh": 50,
+          "tilt_deg": 48,
+          "sideslip_deg": 32.1,
+          "radius_m": 7.4,
+          "throttle_in": 0.55,
+          "throttle_mid": 0.8,
+          "throttle_delta": 0.24
+        }
+      ],
+      "yaw_only": {
+        "yaw_seconds": 8.4,
+        "yaw_only_seconds": 0.8,
+        "yaw_only_pct": 10,
+        "yaw_only_mean_kmh": 50.2,
+        "bands": [
+          {
+            "band": "20-35",
+            "seconds": 1.6,
+            "roll_p90": 0.33,
+            "yaw_p90": 0.7
+          },
+          {
+            "band": "35-max",
+            "seconds": 25.2,
+            "roll_p90": 0.61,
+            "yaw_p90": 0.43
+          }
+        ]
+      },
+      "stalls": []
+    },
+    {
+      "segment": "lap 3",
+      "duration_s": 27.9,
+      "speed_median": 48,
+      "speed_p90": 64,
+      "speed_max": 75,
+      "tilt_median": 38,
+      "tilt_p90": 58,
+      "sideslip_median": 12.0,
+      "sideslip_p90": 23.4,
+      "sideslip_samples": 279,
+      "throttle_median": 0.67,
+      "slow_seconds": 0.0,
+      "corners": [
+        {
+          "t": 2.4,
+          "entry_kmh": 62,
+          "min_kmh": 43,
+          "exit_kmh": 43,
+          "tilt_deg": 52,
+          "sideslip_deg": 12.5,
+          "radius_m": 15.9,
+          "throttle_in": 0.71,
+          "throttle_mid": 0.7,
+          "throttle_delta": -0.01
+        },
+        {
+          "t": 6.3,
+          "entry_kmh": 45,
+          "min_kmh": 45,
+          "exit_kmh": 50,
+          "tilt_deg": 34,
+          "sideslip_deg": 3.8,
+          "radius_m": 17.8,
+          "throttle_in": 0.57,
+          "throttle_mid": 0.76,
+          "throttle_delta": 0.19
+        },
+        {
+          "t": 8.8,
+          "entry_kmh": 45,
+          "min_kmh": 20,
+          "exit_kmh": 21,
+          "tilt_deg": 42,
+          "sideslip_deg": 19.5,
+          "radius_m": 14.9,
+          "throttle_in": 0.62,
+          "throttle_mid": 0.67,
+          "throttle_delta": 0.05
+        },
+        {
+          "t": 13.1,
+          "entry_kmh": 25,
+          "min_kmh": 23,
+          "exit_kmh": 24,
+          "tilt_deg": 31,
+          "sideslip_deg": 13.3,
+          "radius_m": 6.5,
+          "throttle_in": 0.37,
+          "throttle_mid": 0.59,
+          "throttle_delta": 0.22
+        },
+        {
+          "t": 17.1,
+          "entry_kmh": 38,
+          "min_kmh": 38,
+          "exit_kmh": 43,
+          "tilt_deg": 40,
+          "sideslip_deg": 20.3,
+          "radius_m": 12.4,
+          "throttle_in": 0.58,
+          "throttle_mid": 0.72,
+          "throttle_delta": 0.14
+        },
+        {
+          "t": 19.9,
+          "entry_kmh": 48,
+          "min_kmh": 48,
+          "exit_kmh": 54,
+          "tilt_deg": 45,
+          "sideslip_deg": 17.1,
+          "radius_m": 16.5,
+          "throttle_in": 0.79,
+          "throttle_mid": 0.79,
+          "throttle_delta": -0.0
+        },
+        {
+          "t": 21.5,
+          "entry_kmh": 47,
+          "min_kmh": 47,
+          "exit_kmh": 60,
+          "tilt_deg": 66,
+          "sideslip_deg": 4.4,
+          "radius_m": 17.5,
+          "throttle_in": 0.41,
+          "throttle_mid": 0.72,
+          "throttle_delta": 0.31
+        },
+        {
+          "t": 23.5,
+          "entry_kmh": 64,
+          "min_kmh": 60,
+          "exit_kmh": 60,
+          "tilt_deg": 38,
+          "sideslip_deg": 20.1,
+          "radius_m": 25.9,
+          "throttle_in": 0.72,
+          "throttle_mid": 0.78,
+          "throttle_delta": 0.07
+        },
+        {
+          "t": 24.3,
+          "entry_kmh": 58,
+          "min_kmh": 57,
+          "exit_kmh": 57,
+          "tilt_deg": 48,
+          "sideslip_deg": 6.6,
+          "radius_m": 28.1,
+          "throttle_in": 0.58,
+          "throttle_mid": 0.68,
+          "throttle_delta": 0.1
+        },
+        {
+          "t": 26.5,
+          "entry_kmh": 62,
+          "min_kmh": 62,
+          "exit_kmh": 75,
+          "tilt_deg": 56,
+          "sideslip_deg": 8.6,
+          "radius_m": 25.4,
+          "throttle_in": 0.76,
+          "throttle_mid": 0.87,
+          "throttle_delta": 0.12
+        }
+      ],
+      "yaw_only": {
+        "yaw_seconds": 9.2,
+        "yaw_only_seconds": 0.8,
+        "yaw_only_pct": 9,
+        "yaw_only_mean_kmh": 52.1,
+        "bands": [
+          {
+            "band": "20-35",
+            "seconds": 5.0,
+            "roll_p90": 0.53,
+            "yaw_p90": 0.28
+          },
+          {
+            "band": "35-max",
+            "seconds": 22.9,
+            "roll_p90": 0.49,
+            "yaw_p90": 0.33
+          }
+        ]
+      },
+      "stalls": []
+    }
+  ],
+  "findings": [
+    "**0.0 s below 10 km/h** across 80.9 s of flying, 0% of the run.",
+    "**Throttle was added in 23 of 33 corners**, and **18 of 33 exited faster than they entered**.",
+    "**3 corners skidded** (over 30 deg of sideslip).",
+    "**Best lap here was 0:26.184, against a personal best of 0:22.350** on the same geometry (+3.8 s)."
+  ],
+  "personal_bests": {
+    "taken_at": "2026-08-28T16:28:52",
+    "best_race": 80.95347,
+    "all_race": [
+      80.95347,
+      94.12202,
+      99.99324,
+      120.976204,
+      127.860916
+    ],
+    "best_lap": 22.35022,
+    "all_lap": [
+      22.35022,
+      23.384,
+      23.6503124,
+      24.8841171,
+      25.2178974
+    ]
+  },
+  "figures": {
+    "csv": "flight.csv",
+    "timeline": "assets/timeline.svg",
+    "traces": "assets/traces.svg",
+    "track_each": {
+      "0": "assets/track_lap1.svg",
+      "1": "assets/track_lap2.svg",
+      "2": "assets/track_lap3.svg"
+    },
+    "line": "assets/line.svg",
+    "traces_extra": "assets/traces_extra.svg",
+    "corners": "assets/corners.svg"
+  },
+  "animations": {
+    "laps": [
+      "assets/anim_lap1.svg",
+      "assets/anim_lap2.svg",
+      "assets/anim_lap3.svg"
+    ],
+    "stalls": []
+  },
+  "not_in_report": [
+    "per-sample trajectory, attitude and stick positions: flight.csv",
+    "tilt and stick traces are collapsed in the report; the numbers are in segments[].tilt_* and segments[].yaw_only",
+    "corner and stall tables are collapsed in the report; full detail in segments[].corners and segments[].stalls"
+  ]
+}

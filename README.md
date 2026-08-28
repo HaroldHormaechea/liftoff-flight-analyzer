@@ -49,6 +49,10 @@ Then just ask, in your own words:
 **What you get back:** an illustrated report — a folder with a `report.md` and a
 double-clickable `report.html` beside it.
 
+**[See a real one.](examples/)** That folder holds one unedited report, exactly
+as the tool wrote it — or [open the live HTML](https://raw.githack.com/HaroldHormaechea/liftoff-flight-analyzer/main/examples/20260828-140705_BardwellsYard_Race_3lap/report.html),
+since GitHub renders HTML as source.
+
 It opens with the debrief, because that is the answer: your pace and how
 coordinated your flying was, lap by lap; every place the quad slowed down or
 stopped, each labelled with why it happened; what you did *well*, called out by

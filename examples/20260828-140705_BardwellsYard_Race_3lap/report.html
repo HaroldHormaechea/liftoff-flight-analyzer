@@ -1,0 +1,221 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BardwellsYard - Race</title><script>document.documentElement.className='js'</script><style>
+:root{color-scheme:light dark;--bg:#ffffff;--fg:#1b1d21;--mut:#6b7178;--line:#e2e5e9;
+--pan:#f7f8fa;--acc:#2f5fbf}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e7e9ec;--mut:#9aa1a9;
+--line:#2b3037;--pan:#1c1f25;--acc:#7aa2f7}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.65 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:48px 24px 96px}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:21px;margin:52px 0 14px;padding-top:22px;border-top:1px solid var(--line)}
+main>h2:first-of-type{border-top:0;padding-top:0;margin-top:26px}
+h3{font-size:16px;margin:32px 0 10px;color:var(--mut);text-transform:uppercase;
+letter-spacing:.06em}
+p{margin:14px 0}
+img{max-width:100%;height:auto;display:block;margin:18px 0;
+border:1px solid var(--line);border-radius:8px}
+code{background:var(--pan);padding:2px 6px;border-radius:4px;font-size:.88em;
+font-family:'Cascadia Mono',Consolas,monospace}
+hr{border:0;border-top:1px solid var(--line);margin:48px 0 20px}
+.tw{overflow-x:auto;margin:18px 0}
+table{border-collapse:collapse;font-size:13.5px;width:100%}
+th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--line);
+white-space:nowrap}
+th{color:var(--mut);font-weight:600;text-transform:uppercase;font-size:11px;
+letter-spacing:.05em}
+tr:hover td{background:var(--pan)}
+blockquote,.lede{color:var(--mut)}
+footer{color:var(--mut);font-size:13px}
+.rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;
+padding:0 0 18px;border-bottom:1px solid var(--line);margin-bottom:8px;flex-wrap:wrap}
+.rmeta{font-size:19px;line-height:1.5}
+.rwhen{text-align:right;color:var(--mut);font-size:14px;line-height:1.5;
+white-space:nowrap;padding-top:3px}
+.rwhen b{color:var(--fg);font-size:19px}
+.k{color:var(--mut);font-weight:600;font-size:13px;text-transform:uppercase;
+letter-spacing:.06em}
+details{border:1px solid var(--line);border-radius:8px;margin:12px 0;
+background:var(--pan)}
+details[open]{background:transparent}
+summary{cursor:pointer;padding:11px 15px;font-weight:600;font-size:14.5px;
+list-style:none;user-select:none}
+summary::-webkit-details-marker{display:none}
+/* the marker is drawn with borders, not a glyph: U+25B8 is missing from the
+   default Windows UI font and fell back to a tofu box overlapping the label */
+summary::before{content:"";display:inline-block;width:0;height:0;margin-right:10px;
+vertical-align:2px;border:5px solid transparent;border-left-color:var(--mut);
+transition:transform .12s}
+details[open]>summary::before{transform:rotate(90deg) translateX(1px)}
+summary:hover{color:var(--acc)}
+details>*:not(summary){margin-left:15px;margin-right:15px}
+details>*:last-child{margin-bottom:14px}
+h2 .xall{margin-left:14px;vertical-align:3px;display:inline-flex;align-items:center;
+gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;
+background:transparent;color:var(--mut);cursor:pointer;font:inherit;font-size:12px;
+font-weight:500;letter-spacing:.01em}
+h2 .xall:hover{color:var(--acc);border-color:var(--acc)}
+h2 .xall svg{transition:transform .12s}
+h2 .xall[data-open="1"] svg{transform:rotate(180deg)}
+/* Tabs. Everything here is gated on .js, set by an inline script in <head>, so
+   a page opened without JavaScript keeps the old single scroll and never shows
+   a control that cannot work. Gating in CSS rather than hiding panels from
+   JavaScript on load also means there is no flash of the whole report first. */
+.tabs{display:none;gap:4px;flex-wrap:wrap;position:sticky;top:0;z-index:5;
+margin:0 0 30px;padding:10px 0;background:var(--bg);border-bottom:1px solid var(--line)}
+.js .tabs{display:flex}
+.tab{appearance:none;-webkit-appearance:none;border:1px solid transparent;
+border-radius:8px;background:transparent;color:var(--mut);font:inherit;font-size:14px;
+font-weight:600;padding:7px 14px;cursor:pointer;white-space:nowrap;
+transition:color .12s,background .12s,border-color .12s}
+.tab:hover{color:var(--fg);background:var(--pan)}
+.tab.on{color:var(--acc);border-color:var(--line);background:var(--pan)}
+.tab:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.js .panel{display:none}
+.js .panel.on{display:block}
+.panel>h2:first-child{border-top:0;padding-top:0;margin-top:0}
+/* Paper has no tabs: print every panel, in order, and drop the nav. */
+@media print{.tabs{display:none!important}.js .panel{display:block!important}
+.panel>h2:first-child{border-top:1px solid var(--line);padding-top:22px;margin-top:52px}}
+</style></head><body><main><div class="rhead">
+<div class="rmeta">
+<span class="k">Race:</span> <b>03 - Stuff That Works</b> &nbsp;·&nbsp; Race, 3 laps<br>
+<span class="k">Drone:</span> <b>Borrum 180 X (Tutorial)</b>
+</div>
+<div class="rwhen">2026-08-28 14:07<br><b>1:20.953</b></div>
+</div>
+<nav class="tabs" role="tablist" aria-label="Report sections">
+<button class="tab" type="button" role="tab" id="tab-debrief" data-panel="debrief" aria-controls="debrief" aria-selected="false" tabindex="-1">Debrief</button>
+<button class="tab" type="button" role="tab" id="tab-data-analysis" data-panel="data-analysis" aria-controls="data-analysis" aria-selected="false" tabindex="-1">Data analysis</button>
+<button class="tab" type="button" role="tab" id="tab-lap-times" data-panel="lap-times" aria-controls="lap-times" aria-selected="false" tabindex="-1">Lap times</button>
+<button class="tab" type="button" role="tab" id="tab-circuit-path" data-panel="circuit-path" aria-controls="circuit-path" aria-selected="false" tabindex="-1">Circuit path</button>
+<button class="tab" type="button" role="tab" id="tab-flight-playback" data-panel="flight-playback" aria-controls="flight-playback" aria-selected="false" tabindex="-1">Flight playback</button>
+<button class="tab" type="button" role="tab" id="tab-numbers" data-panel="numbers" aria-controls="numbers" aria-selected="false" tabindex="-1">Numbers</button>
+</nav>
+<section class="panel" id="debrief" role="tabpanel" aria-labelledby="tab-debrief">
+<h2>Debrief</h2>
+<p><strong>This is the run of the session, and the reason is measurable: 26.18 / 26.83 / 27.93, and zero seconds below 20 km/h in any of the three laps.</strong> Not "a bit less slow time" — the 0–20 km/h band is simply absent from all three laps. Zero stalls. Zero seconds under 10 km/h. Three skidded corners out of 33, against 18 out of 41 in the 13:25 attempt.</p>
+<p>That is the standing drill, executed. And the rest of the day is the control group. Across the twelve Bardwells Yard laps you flew today, <strong>the four laps with no time under 20 km/h are the four fastest laps of the day on this track.</strong> Every lap that dipped below 20 got slower, and got slower in the same order every time: speed goes, yaw-only time climbs (up to 30–32% on the bad laps, 9–12% here), stalls appear, lap time follows. The lap-to-lap decay that has been an open question is not stamina. It is one dip under 20 km/h and the lap unravelling from there.</p>
+<p>Also: the "throttle sets the magnitude" thing is done. 23 of 33 corners gained throttle, 18 of 33 exited faster than they entered, and you are not being told about it again.</p>
+<p><strong>The one thing to fix: you can hold the floor on a track you know, and you drop it on a track you don't.</strong> The 15:03 Nineteenth Hole run has 42.5 s under 20 km/h in a single lap. You raced a brand-new circuit cold instead of learning it first.</p>
+<p><strong>Drill:</strong> on any new track, three laps with the clock ignored and one rule — never below 20 km/h, wide exits are free. Only then save a race. Learn the line at speed, not at walking pace.</p>
+</section>
+<section class="panel" id="data-analysis" role="tabpanel" aria-labelledby="tab-data-analysis">
+<h2>Data analysis</h2>
+<p>&bull;&nbsp; <strong>0.0 s below 10 km/h</strong> across 80.9 s of flying, 0% of the run.</p>
+<p>&bull;&nbsp; <strong>Throttle was added in 23 of 33 corners</strong>, and <strong>18 of 33 exited faster than they entered</strong>.</p>
+<p>&bull;&nbsp; <strong>3 corners skidded</strong> (over 30 deg of sideslip).</p>
+<p>&bull;&nbsp; <strong>Best lap here was 0:26.184, against a personal best of 0:22.350</strong> on the same geometry (+3.8 s).</p>
+</section>
+<section class="panel" id="lap-times" role="tabpanel" aria-labelledby="tab-lap-times">
+<h2>Lap times</h2>
+<img src="assets/timeline.svg" alt="Lap times">
+</section>
+<section class="panel" id="circuit-path" role="tabpanel" aria-labelledby="tab-circuit-path">
+<h2>Circuit path<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
+<details>
+<summary>Lap 1</summary>
+<img src="assets/track_lap1.svg" alt="lap 1">
+</details>
+<details>
+<summary>Lap 2</summary>
+<img src="assets/track_lap2.svg" alt="lap 2">
+</details>
+<details>
+<summary>Lap 3</summary>
+<img src="assets/track_lap3.svg" alt="lap 3">
+</details>
+<details>
+<summary>Laps overlaid</summary>
+<img src="assets/line.svg" alt="Laps overlaid">
+<p>Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.</p>
+</details>
+</section>
+<section class="panel" id="flight-playback" role="tabpanel" aria-labelledby="tab-flight-playback">
+<h2>Flight playback<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
+<p>The dashed ray is where the quad is <em>going</em>. The arrow is where it is <em>pointing</em>. When they separate, that gap is sideslip: the quad is travelling sideways and the camera is not saying so. The follow cam is the same flight magnified, because at whole-lap scale the gap is a few pixels wide.</p>
+<details>
+<summary>Lap 1</summary>
+<img src="assets/anim_lap1.svg" alt="lap 1">
+</details>
+<details>
+<summary>Lap 2</summary>
+<img src="assets/anim_lap2.svg" alt="lap 2">
+</details>
+<details>
+<summary>Lap 3</summary>
+<img src="assets/anim_lap3.svg" alt="lap 3">
+</details>
+</section>
+<section class="panel" id="numbers" role="tabpanel" aria-labelledby="tab-numbers">
+<h2>Numbers<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
+<div class="tw"><table><thead><tr><th>Segment</th><th>s</th><th>spd med</th><th>spd p90</th><th>spd max</th><th>tilt med</th><th>slip med</th><th>slip p90</th><th>thr med</th><th>under 10 km/h</th></tr></thead><tbody><tr><td>lap 1</td><td>26.2</td><td>52</td><td>68</td><td>82</td><td>40</td><td>15.4</td><td>32.8</td><td>0.67</td><td>0.0</td></tr><tr><td>lap 2</td><td>26.8</td><td>52</td><td>72</td><td>87</td><td>47</td><td>18.0</td><td>47.6</td><td>0.68</td><td>0.0</td></tr><tr><td>lap 3</td><td>27.9</td><td>48</td><td>64</td><td>75</td><td>38</td><td>12.0</td><td>23.4</td><td>0.67</td><td>0.0</td></tr></tbody></table></div>
+<p><strong>Yaw without roll.</strong> A turn flown on yaw alone is a pirouette: the airframe rotates, the path does not bend.</p>
+<div class="tw"><table><thead><tr><th>Segment</th><th>yaw held (s)</th><th>roll at zero (s)</th><th>share</th><th>mean km/h</th><th>p90 by speed band</th></tr></thead><tbody><tr><td>lap 1</td><td>7.6</td><td>0.9</td><td>12%</td><td>63.5</td><td>20-35: roll 0.66, yaw 0.31 / 35-max: roll 0.62, yaw 0.43</td></tr><tr><td>lap 2</td><td>8.4</td><td>0.8</td><td>10%</td><td>50.2</td><td>20-35: roll 0.33, yaw 0.70 / 35-max: roll 0.61, yaw 0.43</td></tr><tr><td>lap 3</td><td>9.2</td><td>0.8</td><td>9%</td><td>52.1</td><td>20-35: roll 0.53, yaw 0.28 / 35-max: roll 0.49, yaw 0.33</td></tr></tbody></table></div>
+<img src="assets/traces.svg" alt="Speed, sideslip and throttle">
+<details>
+<summary>Tilt and stick traces</summary>
+<img src="assets/traces_extra.svg" alt="Tilt and sticks">
+</details>
+<details>
+<summary>Corners (33)</summary>
+<img src="assets/corners.svg" alt="Corner scorecard">
+<div class="tw"><table><thead><tr><th>Segment</th><th>#</th><th>t</th><th>entry</th><th>min</th><th>exit</th><th>tilt</th><th>slip</th><th>radius m</th><th>thr in</th><th>d thr</th></tr></thead><tbody><tr><td>lap 1</td><td>1</td><td>2.5</td><td>62</td><td>57</td><td>57</td><td>48</td><td>6.2</td><td>21.1</td><td>0.66</td><td>+0.06</td></tr><tr><td>lap 1</td><td>2</td><td>3.4</td><td>50</td><td>49</td><td>73</td><td>82</td><td>23.4</td><td>12.0</td><td>0.60</td><td>+0.29</td></tr><tr><td>lap 1</td><td>3</td><td>4.3</td><td>79</td><td>46</td><td>46</td><td>57</td><td>21.3</td><td>16.1</td><td>0.96</td><td>-0.11</td></tr><tr><td>lap 1</td><td>4</td><td>9.0</td><td>49</td><td>35</td><td>35</td><td>35</td><td>40.5</td><td>18.0</td><td>0.59</td><td>-0.02</td></tr><tr><td>lap 1</td><td>5</td><td>10.4</td><td>31</td><td>25</td><td>33</td><td>55</td><td>26.5</td><td>5.5</td><td>0.50</td><td>+0.14</td></tr><tr><td>lap 1</td><td>6</td><td>11.5</td><td>43</td><td>43</td><td>53</td><td>47</td><td>7.8</td><td>17.4</td><td>0.82</td><td>-0.08</td></tr><tr><td>lap 1</td><td>7</td><td>14.6</td><td>42</td><td>33</td><td>35</td><td>48</td><td>16.2</td><td>12.8</td><td>0.58</td><td>+0.01</td></tr><tr><td>lap 1</td><td>8</td><td>17.5</td><td>45</td><td>45</td><td>52</td><td>48</td><td>8.7</td><td>20.4</td><td>0.90</td><td>-0.14</td></tr><tr><td>lap 1</td><td>9</td><td>20.2</td><td>71</td><td>50</td><td>50</td><td>45</td><td>16.2</td><td>27.9</td><td>1.00</td><td>-0.27</td></tr><tr><td>lap 1</td><td>10</td><td>24.6</td><td>59</td><td>59</td><td>82</td><td>65</td><td>26.4</td><td>22.6</td><td>0.69</td><td>+0.11</td></tr><tr><td>lap 2</td><td>1</td><td>1.7</td><td>60</td><td>48</td><td>48</td><td>30</td><td>16.4</td><td>22.5</td><td>0.70</td><td>-0.00</td></tr><tr><td>lap 2</td><td>2</td><td>2.6</td><td>44</td><td>43</td><td>53</td><td>47</td><td>9.8</td><td>15.2</td><td>0.53</td><td>+0.17</td></tr><tr><td>lap 2</td><td>3</td><td>5.7</td><td>44</td><td>44</td><td>47</td><td>53</td><td>15.2</td><td>15.3</td><td>0.44</td><td>+0.18</td></tr><tr><td>lap 2</td><td>4</td><td>7.6</td><td>75</td><td>75</td><td>78</td><td>52</td><td>6.9</td><td>37.1</td><td>0.92</td><td>-0.03</td></tr><tr><td>lap 2</td><td>5</td><td>8.8</td><td>64</td><td>34</td><td>37</td><td>62</td><td>31.1</td><td>11.5</td><td>0.60</td><td>+0.14</td></tr><tr><td>lap 2</td><td>6</td><td>10.6</td><td>51</td><td>51</td><td>55</td><td>44</td><td>14.2</td><td>17.1</td><td>0.90</td><td>-0.09</td></tr><tr><td>lap 2</td><td>7</td><td>11.5</td><td>45</td><td>45</td><td>50</td><td>57</td><td>9.4</td><td>21.1</td><td>0.47</td><td>+0.16</td></tr><tr><td>lap 2</td><td>8</td><td>13.0</td><td>49</td><td>33</td><td>49</td><td>49</td><td>28.1</td><td>12.9</td><td>0.57</td><td>+0.10</td></tr><tr><td>lap 2</td><td>9</td><td>16.1</td><td>60</td><td>55</td><td>60</td><td>36</td><td>7.7</td><td>20.2</td><td>0.85</td><td>+0.03</td></tr><tr><td>lap 2</td><td>10</td><td>17.3</td><td>47</td><td>45</td><td>56</td><td>76</td><td>12.6</td><td>12.7</td><td>0.36</td><td>+0.39</td></tr><tr><td>lap 2</td><td>11</td><td>19.8</td><td>57</td><td>48</td><td>49</td><td>49</td><td>16.6</td><td>15.2</td><td>0.70</td><td>+0.03</td></tr><tr><td>lap 2</td><td>12</td><td>21.7</td><td>47</td><td>47</td><td>56</td><td>53</td><td>12.5</td><td>12.8</td><td>0.52</td><td>+0.28</td></tr><tr><td>lap 2</td><td>13</td><td>24.2</td><td>38</td><td>28</td><td>50</td><td>48</td><td>32.1</td><td>7.4</td><td>0.55</td><td>+0.24</td></tr><tr><td>lap 3</td><td>1</td><td>2.4</td><td>62</td><td>43</td><td>43</td><td>52</td><td>12.5</td><td>15.9</td><td>0.71</td><td>-0.01</td></tr><tr><td>lap 3</td><td>2</td><td>6.3</td><td>45</td><td>45</td><td>50</td><td>34</td><td>3.8</td><td>17.8</td><td>0.57</td><td>+0.19</td></tr><tr><td>lap 3</td><td>3</td><td>8.8</td><td>45</td><td>20</td><td>21</td><td>42</td><td>19.5</td><td>14.9</td><td>0.62</td><td>+0.05</td></tr><tr><td>lap 3</td><td>4</td><td>13.1</td><td>25</td><td>23</td><td>24</td><td>31</td><td>13.3</td><td>6.5</td><td>0.37</td><td>+0.22</td></tr><tr><td>lap 3</td><td>5</td><td>17.1</td><td>38</td><td>38</td><td>43</td><td>40</td><td>20.3</td><td>12.4</td><td>0.58</td><td>+0.14</td></tr><tr><td>lap 3</td><td>6</td><td>19.9</td><td>48</td><td>48</td><td>54</td><td>45</td><td>17.1</td><td>16.5</td><td>0.79</td><td>-0.00</td></tr><tr><td>lap 3</td><td>7</td><td>21.5</td><td>47</td><td>47</td><td>60</td><td>66</td><td>4.4</td><td>17.5</td><td>0.41</td><td>+0.31</td></tr><tr><td>lap 3</td><td>8</td><td>23.5</td><td>64</td><td>60</td><td>60</td><td>38</td><td>20.1</td><td>25.9</td><td>0.72</td><td>+0.07</td></tr><tr><td>lap 3</td><td>9</td><td>24.3</td><td>58</td><td>57</td><td>57</td><td>48</td><td>6.6</td><td>28.1</td><td>0.58</td><td>+0.10</td></tr><tr><td>lap 3</td><td>10</td><td>26.5</td><td>62</td><td>62</td><td>75</td><td>56</td><td>8.6</td><td>25.4</td><td>0.76</td><td>+0.12</td></tr></tbody></table></div>
+</details>
+</section>
+<hr>
+<p>Replay <code>20260828-140705_BardwellsYard_Race_3lap.xml</code> · samples in <code>flight.csv</code> · <strong>full analysis, including everything not drawn above, in <code>analysis.json</code></strong> · generated 2026-08-28 17:43 by <code>fpv_report.py</code></p></main><script>
+for (const b of document.querySelectorAll('.xall')) {
+  b.addEventListener('click', () => {
+    const want = b.getAttribute('data-open') !== '1';
+    let n = b.closest('h2').nextElementSibling;
+    while (n && n.tagName !== 'H2') {
+      if (n.tagName === 'DETAILS') n.open = want;
+      for (const d of n.querySelectorAll('details')) d.open = want;
+      n = n.nextElementSibling;
+    }
+    b.setAttribute('data-open', want ? '1' : '0');
+    b.lastChild.textContent = want ? 'collapse all' : 'expand all';
+  });
+}
+</script><script>
+(function () {
+  const nav = document.querySelector('.tabs');
+  if (!nav) return;
+  const tabs = [...nav.querySelectorAll('.tab')];
+  const panels = [...document.querySelectorAll('.panel')];
+  function show(id, remember) {
+    for (const t of tabs) {
+      const on = t.dataset.panel === id;
+      t.classList.toggle('on', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    }
+    for (const p of panels) p.classList.toggle('on', p.id === id);
+    // replaceState rather than assigning location.hash: the tab row is
+    // navigation inside one document, and every click landing in the back
+    // stack would make the back button useless for leaving the report.
+    if (remember && history.replaceState) history.replaceState(null, '', '#' + id);
+  }
+  nav.addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (t) { show(t.dataset.panel, true); scrollTo(0, 0); }
+  });
+  nav.addEventListener('keydown', e => {
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const j = {ArrowRight: (i + 1) % tabs.length,
+               ArrowLeft: (i - 1 + tabs.length) % tabs.length,
+               Home: 0, End: tabs.length - 1}[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    tabs[j].focus();
+    show(tabs[j].dataset.panel, true);
+  });
+  const wanted = () => decodeURIComponent(location.hash.slice(1));
+  show(panels.some(p => p.id === wanted()) ? wanted() : panels[0].id, false);
+  addEventListener('hashchange', () => {
+    if (panels.some(p => p.id === wanted())) show(wanted(), false);
+  });
+})();
+</script></body></html>

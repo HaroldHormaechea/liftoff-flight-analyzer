@@ -2,20 +2,33 @@
 
 Turn a Liftoff: FPV Drone Racing flight into coaching data.
 
-**No dependencies.** Python 3.9+ and the standard library. Nothing to install,
-nothing to pin, portable to any machine as a folder copy.
+**The analysis path has no dependencies.** Python 3.9+ and the standard library:
+decoding a replay, measuring a flight, writing a report, extracting the track
+XMLs. Nothing to install, nothing to pin, portable as a folder copy.
 
-| script | what it does |
-|---|---|
-| `fpv_report.py` | **the normal entry point** — replay in, illustrated Markdown debrief out |
-| `liftoff_replay.py` | archive + decode a saved in-game replay to CSV |
-| `analyze_flight.py` | flight geometry: sideslip, tilt, turn radius, corners, yaw-only time, and stalls classified as overrun / corner / hesitation |
-| `liftoff_pbs.py` | personal bests per track, with snapshot history |
-| `liftoff_telemetry.py` | live UDP feed at 100 Hz — only source of gyro/RPM |
+**Two scripts need `UnityPy`, and only when building a cache.** `liftoff_scene.py`
+and `liftoff_props.py` read the game's compiled scene and prefab bundles, which
+means generic Unity object parsing and, for collision meshes, vertex buffer
+decoding. That is disproportionate to hand-roll for a step that runs once per
+environment per game patch. What they produce is plain JSON, so everything that
+*reads* a cache still needs nothing.
+
+| script | what it does | needs |
+|---|---|---|
+| `fpv_report.py` | **the normal entry point** — replay in, illustrated Markdown debrief out | — |
+| `liftoff_replay.py` | archive + decode a saved in-game replay to CSV | — |
+| `analyze_flight.py` | flight geometry: sideslip, tilt, turn radius, corners, yaw-only time, and stalls classified as overrun / corner / hesitation | — |
+| `liftoff_pbs.py` | personal bests per track, with snapshot history | — |
+| `liftoff_tracks.py` | extract the game's track and race geometry: where the gates are | — |
+| `liftoff_scene.py` | an environment's collision geometry, and the cull to one incident | UnityPy |
+| `liftoff_props.py` | collider shapes for the items a track is built from | UnityPy |
+| `liftoff_view.py` | a 3D view of an incident: geometry, path, orbit, scrub | — |
+| `liftoff_telemetry.py` | live UDP feed at 100 Hz — only source of gyro/RPM | — |
 
 ## The normal run
 
 ```bash
+python liftoff_tracks.py --check     # first: is the track geometry present and current?
 python fpv_report.py --latest        # archive, decode, analyse, draw, write, show
 python liftoff_pbs.py --save
 ```
@@ -140,6 +153,129 @@ durable record; `Recordings/` is scratch space.
 overwritten in place, so a beaten time is gone. `liftoff_pbs.py --save` snapshots
 them to `data/liftoff_history.json`. Run it every session — it is also the only
 way to see flights that were never saved as replays.
+
+## Track geometry
+
+A replay says where the quad went. It does not say where the track was. Without
+the gates, "he went wide" is an opinion; with them it is a lateral offset
+through a 2.45 m aperture.
+
+`liftoff_tracks.py` finds the Liftoff install — every Steam library named by the
+registry and `libraryfolders.vdf`, or `--game-dir` / `$LIFTOFF_DIR` — and writes
+the game's own track and race XMLs out of its Unity bundles into `trackdata/`,
+about five seconds for all 184.
+
+```bash
+python liftoff_tracks.py --check                          # ready? exit 1 if not
+python liftoff_tracks.py                                  # rebuild; no-op if current
+python liftoff_tracks.py --for-replay replays/<file>.xml  # which track was flown
+python liftoff_tracks.py --gates "03 - Stuff That Works"  # the route, with geometry
+python liftoff_tracks.py --list                           # every track, by environment
+```
+
+**The extracted XMLs are game assets: gitignored, never committed, never
+hand-edited.** Only the script is versioned. They are cheap to regenerate and
+the next rebuild overwrites them.
+
+**Always `--check` first.** Bundle filenames are content hashes, so a game patch
+leaves the extracted XMLs silently describing a layout the game no longer has.
+The check compares the recorded bundle fingerprint and Steam build id against
+what is installed. Stale gates are worse than no gates: they produce confident,
+wrong numbers.
+
+`index.json` is the join table, keyed by the `localID` GUIDs a replay records —
+which is what makes `--for-replay` a lookup rather than a guess. Matching on the
+environment name cannot work: an environment holds five or six tracks that all
+share it.
+
+Positions are Unity world space, left-handed, +Y up, metres — **the same frame
+the replay records**, so a gate and a flight path compare with no
+transformation. For an item at yaw `r` the normal is `(sin r, 0, cos r)` and the
+width axis is `(cos r, 0, -sin r)`.
+
+Two things that will bite a naive reader:
+
+* **Which items are gates is the race's decision, not the track's.** A
+  checkpoint is any blueprint the route names by `instanceID`, of any subtype.
+  On Bardwells Yard every one is a plain inflatable arch; on HangarC03 the route
+  mixes truss gates, a fixed 5×5 box and three resizable checkpoints. Filtering a
+  track's blueprints by `xsi:type` to enumerate "the gates" finds three of the
+  ten. Resolve the route. It is a lap, so it ends back on the checkpoint it
+  started from.
+* **A checkpoint is a scoring volume, not a hole.** The two are independent and
+  the environment can obstruct any part of one. On HangarC03 the gate 31
+  checkpoint centre sits 0.51 m inside a closed container door: aim at the middle
+  of the gate and you fly into solid geometry. Anything that emits a racing line
+  has to intersect apertures against scene colliders first — and this script does
+  not extract colliders, only the track layout.
+
+`aperture` is present only on the resizable subtypes, whose prefabs are
+unit-sized so their `scale` *is* the opening in metres. Everything else is a
+fixed prefab whose opening is baked into the model, and sizing one means
+measuring its collider in the scene bundle.
+
+## Collision geometry, and the 3D incident view
+
+`liftoff_tracks.py` says where the gates are. `liftoff_scene.py` and
+`liftoff_props.py` say where the *world* is — what a crash actually hit.
+
+```bash
+python liftoff_scene.py --environment LiftoffArena --witness replays/<a flight there>.xml
+python liftoff_props.py
+python liftoff_view.py --replay replays/<crash>.xml -o crash.html
+```
+
+Three sources, because a track is assembled from three:
+
+| | holds | from |
+|---|---|---|
+| scene cache | the static environment: walls, floors, structures | the environment's scene bundle |
+| prop table | the shape of every item a track places, in the item's own frame | the prefab bundles |
+| Track XML | where each item sits, and its yaw | `liftoff_tracks.py` |
+
+**The scene alone is not enough, and this is the trap.** Track props are placed
+by the Track XML and instantiated at runtime, so they are *not* in the scene
+bundle. The reference crash hit a ramp 2.30 m away and a crowd barrier 2.46 m
+away, while the nearest scene collider was 8 m off — drawn from the scene alone
+that crash looks like the quad stopping in clear air.
+
+**Identifying an environment's scene bundle needs a flight.** Bundle names are
+content hashes, and every environment is authored around the world origin at
+similar scale, so gate positions match almost any scene — ranking by them picks
+the *wrong* bundle for HangarC03, whose answer is known independently. What
+works is a flight as a witness to free space: reject any scene the path flies
+through, then rank the survivors by gate proximity. Validated on both
+environments where the truth is known. `--bundle` skips it when you already know.
+
+Three things that are easy to get wrong, all of which were:
+
+* **Trigger volumes are not solid.** An inflatable arch contains a 6.18 × 3.69 m
+  box — the scoring volume, not the arch. Drawn as geometry it is a wall across
+  the gate, and left in the scene cache it corrupts the free-space test above.
+  Both extractors now flag `m_IsTrigger` and drop them from solids.
+* **A prefab name appears on several GameObjects** — variants, nested copies, LOD
+  holders — and only one owns the colliders. Taking the first silently produced
+  an empty shape for the commonest prop on the track.
+* **A mesh collider's bounding box is not its shape.** A ramp's hull is two
+  triangles (`TriangleCollider02`, and the game's own typo `TraingleCollider01`);
+  its AABB is a slab with two vertical walls that do not exist. Real triangles
+  are decoded; the AABB is a marked last resort.
+
+Still not extracted: scene MeshColliders and TerrainColliders. Outdoor grounds
+live in those, so an outdoor scene renders its obstacles over no floor. A scene
+reports what it skipped, and `liftoff_view.py` says so on the page.
+
+### Why this parses Unity bundles by hand
+
+UnityPy does it in ten lines, and pulls in a heavy dependency with an unstable
+API that also needs `FALLBACK_UNITY_VERSION` set by hand, because these bundles
+carry no usable version string. Everything else here is standard library and
+portable as a folder copy, and the one moment this script is needed — the game
+just updated and the gates are stale — is the worst possible moment to discover
+a dependency is missing. The UnityFS reader inside it covers exactly what
+Liftoff ships: UnityFS v6–8, LZ4/LZ4HC or uncompressed blocks, SerializedFile
+v17–22. Its output was verified byte-identical to UnityPy's across all 184
+assets.
 
 ## Replay format
 

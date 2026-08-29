@@ -47,6 +47,63 @@ skill, say — keep the profile in that project, not in this directory, and the
 tools will enforce it: `refuse_inside_toolkit()` hard-stops any attempt to write
 reports, replays or history under a linked toolkit root.
 
+## Step 1 — check the track data before anything else
+
+**Run this first, every review, before reading a replay.** It is one command and
+it either prints READY or tells you what to do.
+
+```bash
+S=scripts
+python $S/liftoff_tracks.py --check -o trackdata   # exit 0 ready, 1 not
+python $S/liftoff_tracks.py         -o trackdata   # rebuild; a no-op if current
+```
+
+`liftoff_tracks.py` finds the Liftoff install itself — every Steam library from
+the registry and `libraryfolders.vdf` — and extracts all 92 tracks and 92 races
+out of the game's Unity bundles as XML, plus an `index.json` that joins a
+replay's `trackID` to the track it was flown on. It takes about five seconds
+and needs nothing installed.
+
+**The extracted XMLs are game assets and are gitignored. Only the script is
+committed.** They are cheap to regenerate and must not be redistributed, so
+never commit them, and never hand-edit them — the next rebuild overwrites them.
+
+Why the check exists rather than just running the extractor: bundle filenames
+are content hashes, so a game patch silently leaves the extracted XMLs
+describing a layout the game no longer has. `--check` compares the recorded
+bundle fingerprint and Steam build id against what is installed and fails the
+moment they disagree. Analysing a flight against stale gates is worse than
+having no gates — it produces confident, wrong numbers.
+
+If it says NOT READY, rebuild it. That is the whole procedure; there is no case
+where the right move is to continue on stale data.
+
+What it is for, once ready:
+
+```bash
+python $S/liftoff_tracks.py --for-replay replays/<file>.xml -o trackdata
+python $S/liftoff_tracks.py --gates "03 - Stuff That Works" -o trackdata
+```
+
+`--for-replay` names the track and the race, because a replay records only a
+GUID and an environment name — and an environment holds five or six tracks that
+all share it. `--gates` prints the route in the order it is flown, each
+checkpoint with its world position, its yaw and its aperture in metres where it
+has one. Both are in the same coordinate frame as the replay, so a gate and a
+flight path compare with no transformation.
+
+**Which items are gates is the race's decision, not the track's.** A checkpoint
+is any blueprint the route names, of any type: on Bardwells Yard all of them are
+plain inflatable arches, on HangarC03 the route mixes truss gates, a fixed 5×5
+box and three resizable ones. Filtering a track's items by type to find "the
+gates" finds three of the ten. Resolve the route.
+
+**A checkpoint is a scoring volume, not a hole.** The environment can obstruct
+any part of it — on HangarC03 the gate 31 checkpoint centre sits half a metre
+inside a closed container door, so aiming at the middle of the gate flies into
+solid geometry. Do not turn gate positions into a racing line without checking
+what is around them.
+
 ## The deliverable is an illustrated report, not a terminal dump
 
 `fpv_report.py` writes a folder holding the report, its figures and animated
@@ -54,7 +111,7 @@ replays of every lap and every stall. That is what the pilot gets. The terminal
 output of `analyze_flight.py` is for answering a quick question mid-conversation,
 not for a review.
 
-## Step 1 — build the report
+## Step 2 — build the report
 
 ```bash
 S=scripts
@@ -103,7 +160,7 @@ that finished.
 
 `report.html` opens in the default browser as soon as it is written, so the
 pilot sees the report rather than a path to it. Pass `--no-open` when that is a
-nuisance — a batch run, or the regeneration in step 3 that only exists to pick
+nuisance — a batch run, or the regeneration in step 4 that only exists to pick
 up a hand-written debrief.
 
 Useful flags: `--no-anim` when only the numbers are wanted, `--no-open` to keep
@@ -111,7 +168,7 @@ the browser shut, `--cam-span` for the follow-cam width in metres, `--stall-pad`
 for context around a stall clip, `--reset-debrief` to clear a hand-written
 debrief instead of carrying it forward.
 
-## Step 2 — read the figures before writing a word
+## Step 3 — read the figures before writing a word
 
 - **Lap times** — lap bars with the stalls marked in red, against the pilot's
   best ever lap on that track. Says immediately whether the deficit is pace or
@@ -156,7 +213,7 @@ What to read in the numbers:
   with a tiny radius and high sideslip is the failure pattern.
 - **entry vs exit speed** — exit faster than entry is slow-in/fast-out working.
 
-## Step 3 — write the Debrief section
+## Step 4 — write the Debrief section
 
 The script fills in everything factual and leaves `## Debrief` empty on purpose.
 It writes what happened; it does not write the coaching, because the diagnosis
@@ -214,7 +271,7 @@ them, and the next flight's data cannot attribute a change to any of them.
 Then say the same thing in chat, short, and link the report. Do not paste the
 tables into the conversation; they are in the file.
 
-## Step 4 — the other sources, only when needed
+## Step 5 — the other sources, only when needed
 
 - **`liftoff_pbs.py --save`** — personal bests per track, diffed against the last
   snapshot. Liftoff overwrites these in place, so a beaten time is gone unless
@@ -227,7 +284,7 @@ tables into the conversation; they are in the file.
   technique, which 10 Hz covers. Enabled via `TelemetryConfiguration.json` in the
   Liftoff LocalLow folder, default endpoint `127.0.0.1:9001`.
 
-## Step 5 — persist
+## Step 6 — persist
 
 Append a tight section to the notes the profile points at: date, what was flown,
 the measured result, the diagnosis, the single fix given, and the path to the

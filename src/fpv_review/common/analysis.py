@@ -100,33 +100,12 @@ def load(series, speed_floor_kmh):
         sys.exit("no samples to analyse")
     out = []
     for i, s in enumerate(series):
-        # PRECISION PARITY - TEMPORARY, AND ITS PLACEMENT IS LOAD-BEARING.
-        #
-        # Until this commit the analysis read flight.csv, which is written with
-        # round(x, 6), while the incident view and the crash table read the same
-        # flight at full double precision from memory. Feeding the analysis the
-        # full-precision series would shift its numbers in the 7th significant
-        # digit across most of analysis.json, at exactly the moment the migration
-        # has to prove it changed nothing.
-        #
-        # So quantise here, reproducing the CSV round-trip exactly: csv.writer
-        # emits repr() of the rounded float and float() of that string returns
-        # the identical double.
-        #
-        # DO NOT "tidy" this into common/schema.py or source.load_flight(). The
-        # view and the crash table see full precision today, and quantising
-        # upstream would change THEIR numbers instead - the same regression in
-        # the opposite direction, and harder to spot.
-        #
-        # This exists for the migration only. It is removed in its own commit,
-        # whose entire diff is the deletion of these lines, so that the numeric
-        # change is attributable to one line and to nothing in the restructure.
-        q = tuple(round(v, 6) for v in s.attitude)
-        vel = tuple(round(v, 6) for v in s.velocity)
-        t = round(s.t, 6)
-        px, py, pz = (round(v, 6) for v in s.pos)
-        thr, yaw = round(s.throttle, 6), round(s.yaw, 6)
-        pit, rol = round(s.pitch, 6), round(s.roll, 6)
+        q = s.attitude
+        vel = s.velocity
+        t = s.t
+        px, py, pz = s.pos
+        thr, yaw = s.throttle, s.yaw
+        pit, rol = s.pitch, s.roll
 
         fwd = rotate(q, (0, 0, 1))
         up = rotate(q, (0, 1, 0))

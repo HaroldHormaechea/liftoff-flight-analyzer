@@ -241,11 +241,7 @@ def load_samples(series, args):
     once by the schema layer and never again."""
     data = analysis.load(series, args.speed_floor)
     for s, sample in zip(data, series):
-        # Quantised exactly as analysis.load() quantises: the old second pass
-        # read the 6-decimal CSV values, so the nose bearing was computed from
-        # those. Removed with the rest of the parity measure.
-        q = tuple(round(v, 6) for v in sample.attitude)
-        f = analysis.rotate(q, (0, 0, 1))
+        f = analysis.rotate(sample.attitude, (0, 0, 1))
         s["nose"] = math.degrees(math.atan2(f[0], f[2]))
     return data
 

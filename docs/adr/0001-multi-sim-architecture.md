@@ -201,8 +201,8 @@ would have produced 7th-significant-digit differences across most of
 `analysis.json` at exactly the moment the migration needed to prove it changed
 nothing.
 
-So `analysis.load()` quantised each field with `round(v, 6)` as it read, exactly
-reproducing the CSV round-trip — an exact equivalence, not an approximation:
+So for the duration of the migration `analysis.load()` quantised each field with
+`round(v, 6)` as it read, exactly reproducing the CSV round-trip — an exact equivalence, not an approximation:
 `csv.writer` emits `repr()` of the rounded float and `float()` of that string
 returns the identical double. It was verified across 310,637 values including
 adversarial 6-decimal ties, signed zero, denormals and random 64-bit patterns,
@@ -210,14 +210,42 @@ compared as packed doubles, with zero mismatches; and again on 107,253 values
 from four real replays against the pre-migration code.
 
 The measure sat in two places — `analysis.load()` and the nose bearing in
-`report.py` — and **only** there. Hoisting it into `schema.py` or
-`source.load_flight()` would have changed the crash-table and incident-view
-numbers instead: the same regression in the opposite direction, and harder to
-spot. It was removed in its own commit, whose entire diff is that removal, so
-that the resulting numeric change is attributable to one decision and to nothing
-in the restructure. **`flight.csv` keeps its six-decimal serialisation
-permanently** — it is the readable, diffable interchange artifact, and full
-precision there was explicitly declined.
+`report.py`'s `load_samples()` — and **only** there. Hoisting it into
+`schema.py` or `source.load_flight()` would have changed the crash-table and
+incident-view numbers instead: the same regression in the opposite direction,
+and harder to spot.
+
+**It has been removed, and the removal is part of this change rather than a wart
+left behind it.** It existed for the five commits of the migration; a sixth
+deleted both sites and nothing else, so that the numeric change is attributable
+to one decision and to nothing in the restructure. The analysis now runs at one
+precision — full double — and so does everything downstream of it.
+
+What that removal actually moved, measured on the four verification replays:
+
+- **85% of the analysis's in-memory float values changed** (78,279 of 91,681),
+  which is the expected consequence of removing a quantisation and is the
+  evidence that the measure had really been doing something.
+- **Nothing in `analysis.json` changed at all.** Every value there is rounded on
+  the way out — speeds to whole km/h, angles to a decimal — and the shift is far
+  below that. The published record is insensitive to it.
+- **45 of 99,385 numeric tokens across the generated SVGs moved**, every one by
+  0.1 in the last printed decimal: coordinates that had been sitting on a
+  rounding boundary. No figure changed structurally.
+- **No verdict changed.** Not one stall reclassified, no crash appeared or
+  disappeared, and the recording counts held at 1 / 0 / 2 / 11 — including the
+  knife-edge case whose single impact measures 20.2 km/h against a 20.0 km/h
+  threshold, which was the flip most likely to happen and did not.
+
+The largest absolute movements were 0.09° of tilt, 0.002°/s of turn rate and
+0.002 m of turn radius; every other field moved by less than 10⁻⁶ of its unit.
+So the numbers are now marginally more faithful to the flight, and no
+conclusion the tool draws rests on the difference.
+
+**`flight.csv` keeps its six-decimal serialisation permanently** — it is the
+readable, diffable interchange artifact, full precision there was explicitly
+declined, and it was verified byte-identical across the removal. Only the
+in-memory analysis path went to full precision.
 
 **Degradation stays explicit.** A sim declares what it cannot supply
 (`capabilities.py`), the declaration is written into `analysis.json` as one

@@ -11,4 +11,4 @@ Statuses:
 | # | File | Title | Status | Updated |
 |---|------|-------|--------|---------|
 | 01 | [use-cases/01-multi-sim-architecture-adr.md](use-cases/01-multi-sim-architecture-adr.md) | Restructure into a multi-sim architecture and record the ADR | done | 2026-08-30 |
-| 02 | [use-cases/02-contributing-extension-points.md](use-cases/02-contributing-extension-points.md) | Contributor guide for the new extension points | blocked | 2026-08-30 |
+| 02 | [use-cases/02-contributing-extension-points.md](use-cases/02-contributing-extension-points.md) | Contributor guide for the new extension points | in-progress | 2026-08-30 |

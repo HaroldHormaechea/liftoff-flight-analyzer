@@ -220,3 +220,59 @@ All three come from the rejected duplicate plan. The challenger judged them addi
 The second plan was **not a competing proposal. It was a recovery attempt against a loss that had not happened.** When the account limit killed the first pair mid-round, the lead concluded the approved text was gone — the agents held it only in memory — and briefed a fresh analyst to reconstruct it from the record. The original pair then came back alive after the limit reset, still holding v5, and finished.
 
 The cost was one wasted analyst run and a near-miss: an unreviewed reconstruction carrying a real criterion-10 defect nearly displaced a six-round-reviewed original, and was caught only because both arrived in the same batch. **The lesson for the next handoff: confirm an agent is actually dead before declaring its work lost.** `ListAgents` reports liveness; a failure notification reports only that a turn ended. The two are not the same, and the difference is what separates a recovery from a duplicate.
+
+---
+
+# Status after merge — QA outstanding
+
+**Merged to `main` as `ed1bec3` (PR #2) on 2026-08-30, before independent QA ran.**
+The author authorised the merge explicitly. All seven sections are implemented and
+the developer's own verification is recorded above and in the PR body; what has
+**not** happened is verification by anyone other than the agent that wrote the code.
+
+The ledger row stays `in-progress` rather than `done` for that reason: the ledger's
+`done` means implementation *and* verification, and only the first is true.
+
+## What QA still has to do, and against what
+
+The frozen baseline at `C:\dev\liftoff-uc02-run\baseline\` (119 files,
+`baseline-sha256.txt`) is intact and was captured while `src/` was byte-identical
+to `main`. It is still the correct reference — the merge did not touch it, and
+comparing `main` against it is exactly as valid as comparing the branch was.
+
+Run directory unchanged: `C:\dev\liftoff-uc02-run` with `trackdata/` (187 entries),
+`data/liftoff_history.json`, `replays/` (four archived). Same rules — explicit
+archived paths, never `--latest`, never `pbs --save`, fresh `-o`.
+
+**Claims to check rather than accept**, all from the developer's own runs:
+
+- ten `--help` surfaces byte-identical (root 1602 … telemetry 2858)
+- three `view` pages byte-identical at 222,363 / 187,422 / 288,951
+- Woodpecker `view` exits 1, writes no file, refusal byte-identical
+- 27 of 39 report artifacts byte-identical; 12 differ on one timestamp line each
+- a four-module package registers, yields exactly `['analyse', 'report']`, and
+  produces a complete 12-file report on an explicit path
+- all three refusal shapes name the missing item **and** its file, leaving no
+  output directory
+- criterion 20 both halves in the same state: `view` refuses cleanly, `report`
+  still exits 0 and writes a complete directory
+- all 17 commands the guide prints run as printed, in both shells
+
+**Where to look hardest:** criterion 10 (every printed command runs as printed —
+the developer found three of its own wrong by running them; find the fourth if
+there is one), criterion 2 (citation not restatement), and the five ADR
+amendments checked against the code they document.
+
+**One trap already paid for:** the frozen help captures carry **CRLF**; a naive
+comparison against LF-emitting output reports ten false differences on the last
+line. Normalise before concluding. The lead lost time to this once.
+
+## A process finding from this run, for the harness rather than the project
+
+The developer read the approved plan **once** at the start and worked from that
+copy through all seven sections. A correction committed after that read
+(`5d4dc56`, moving the falsification step out of the guide) never reached it; the
+right instruction was followed only because the lead happened to restate it in a
+later brief. **A plan file is durable so it can be re-read; treating it as a
+one-time load defeats that.** Re-reading at each section boundary costs almost
+nothing and closes the gap.

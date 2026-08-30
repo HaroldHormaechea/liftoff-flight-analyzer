@@ -1,0 +1,23 @@
+# Metadata only. This project is NOT an install target: it ships by being cloned
+# into ~/.claude/skills/fpv-review and run in place, so there is deliberately no
+# [build-system], no [tool.setuptools] and no [project.scripts]. `pip install .`
+# is out of scope and untested.
+#
+# The file exists to declare the zero-dependency promise to tooling and to a
+# reader: `dependencies = []` is the whole point of it. It is also one of the two
+# markers common/toolkit.py searches upward for to find the repository root, so
+# moving or removing it disables the refuse_inside_toolkit() guard.
+
+[project]
+name = "fpv-review"
+version = "0.1.0"
+description = "Turn a saved FPV sim replay into an illustrated, measured debrief."
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# UnityPy is needed ONLY to BUILD the scene and prop caches, and only on Liftoff.
+# It is imported inside a function in sources/liftoff/{scene,props}.py so those
+# modules still load without it, and every consumer of a built cache reads plain
+# JSON and needs nothing.
+unity = ["UnityPy"]

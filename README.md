@@ -31,6 +31,34 @@ git clone https://github.com/HaroldHormaechea/liftoff-flight-analyzer \
 
 The skill is called **fpv-review**; the repository is the tool it wraps.
 
+Nothing to install after the clone. The analysis path is standard library
+only, so a machine with Python 3.9 or newer runs it as it stands.
+
+### Running it directly
+
+You never have to — asking in plain language is the point — but every step is
+one command, and the folder you are standing in is where the output goes:
+
+```powershell
+# PowerShell
+$FPV = "$HOME\.claude\skills\fpv-review"
+python "$FPV\src" --help                 # every command
+python "$FPV\src" tracks --check         # is the track data current?
+python "$FPV\src" report --latest        # review the newest replay
+```
+
+```bash
+# bash
+FPV="$HOME/.claude/skills/fpv-review"
+python "$FPV/src" --help                         # every command
+python "$FPV/src" tracks --check                 # is the track data current?
+python "$FPV/src" report --latest                # review the newest replay
+```
+
+Passing the `src` folder to `python` is deliberate and is what keeps your
+replays and reports in *your* project rather than inside the toolkit. The
+reasoning is in [`docs/adr/0001-multi-sim-architecture.md`](docs/adr/0001-multi-sim-architecture.md).
+
 **Save a replay in Liftoff** from the finish screen or the pause menu — that is
 the only thing you have to remember to do. Nothing needs to be running while you
 fly. Save your good runs as well as your bad ones; a fast lap is worth more to

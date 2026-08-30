@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-analyze_flight.py - flight-geometry analysis of a decoded Liftoff flight.
+analysis.py - flight-geometry analysis of a decoded flight.
 
-Consumes the CSV written by liftoff_replay.py (10 Hz) or liftoff_telemetry.py
+Consumes a FlightSeries decoded by a sim's source.py (Liftoff: 10 Hz) or a CSV
+written by its telemetry capture
 (100 Hz). Both carry position, attitude quaternion and stick positions, which is
 everything this needs.
 
@@ -58,14 +59,13 @@ and every one is a CLI flag, so a default can be moved without touching code.
 
 Usage
 -----
-  python analyze_flight.py flight.csv
-  python analyze_flight.py flight.csv --laps "73:1077,1077:1768"   # sample indices
-  python analyze_flight.py flight.csv --laps "..." --trace         # stick traces
-  python analyze_flight.py flight.csv --json
+  python "<clone>/src" analyse flight.csv
+  python "<clone>/src" analyse flight.csv --laps "73:1077,1077:1768"  # sample indices
+  python "<clone>/src" analyse flight.csv --laps "..." --trace        # stick traces
+  python "<clone>/src" analyse flight.csv --json
 """
 
 import argparse
-import csv
 import json
 import math
 import sys
@@ -89,25 +89,26 @@ def pct(vals, q):
     return v[min(len(v) - 1, int(len(v) * q / 100))]
 
 
-def load(path, speed_floor_kmh):
-    rows = list(csv.DictReader(open(path)))
-    if not rows:
-        sys.exit("empty csv: %s" % path)
-    f = lambda r, k: float(r[k]) if r.get(k) not in (None, "") else 0.0
-    has_vel = "vel_x" in rows[0]
+def load(series, speed_floor_kmh):
+    """The per-sample working values the rest of this module reads.
+
+    Takes a common.schema.FlightSeries. It used to take a path and parse
+    flight.csv itself; the CSV is now a side output rather than the pipe between
+    stages, so the series arrives directly and is never serialised in between.
+    """
+    if not len(series):
+        sys.exit("no samples to analyse")
     out = []
-    for i, r in enumerate(rows):
-        q = (f(r, "quat_x"), f(r, "quat_y"), f(r, "quat_z"), f(r, "quat_w"))
+    for i, s in enumerate(series):
+        q = s.attitude
+        vel = s.velocity
+        t = s.t
+        px, py, pz = s.pos
+        thr, yaw = s.throttle, s.yaw
+        pit, rol = s.pitch, s.roll
+
         fwd = rotate(q, (0, 0, 1))
         up = rotate(q, (0, 1, 0))
-        if has_vel:
-            vel = (f(r, "vel_x"), f(r, "vel_y"), f(r, "vel_z"))
-        else:
-            a, b = rows[max(0, i - 1)], rows[min(len(rows) - 1, i + 1)]
-            dt = f(b, "t") - f(a, "t")
-            vel = (((f(b, "pos_x") - f(a, "pos_x")) / dt,
-                    (f(b, "pos_y") - f(a, "pos_y")) / dt,
-                    (f(b, "pos_z") - f(a, "pos_z")) / dt) if dt > 0 else (0, 0, 0))
         vh = math.hypot(vel[0], vel[2])
         spd = math.sqrt(sum(c * c for c in vel)) * 3.6
         heading = math.atan2(vel[0], vel[2]) if vh > 0.5 else None
@@ -116,12 +117,12 @@ def load(path, speed_floor_kmh):
             d = math.degrees(math.atan2(fwd[0], fwd[2]) - heading)
             slip = (d + 180) % 360 - 180
         out.append({
-            "i": i, "t": f(r, "t"), "alt": f(r, "pos_y"),
-            "x": f(r, "pos_x"), "z": f(r, "pos_z"),
+            "i": i, "t": t, "alt": py,
+            "x": px, "z": pz,
             "spd": spd, "vh": vh, "vy": vel[1], "heading": heading, "slip": slip,
             "tilt": math.degrees(math.acos(max(-1.0, min(1.0, up[1])))),
-            "thr": f(r, "in_throttle"), "yaw": f(r, "in_yaw"),
-            "pitch": f(r, "in_pitch"), "roll": f(r, "in_roll"),
+            "thr": thr, "yaw": yaw,
+            "pitch": pit, "roll": rol,
         })
     for i, s in enumerate(out):
         a, b = out[max(0, i - 1)], out[min(len(out) - 1, i + 1)]
@@ -381,21 +382,32 @@ def segment_stats(seg, dt, stall_speed):
     }
 
 
-def build_parser():
+def build_parser(calibration):
     """The CLI, exposed so other tools can borrow the thresholds.
 
-    fpv_report.py embeds this analysis rather than re-deriving it, so the
+    common/report.py embeds this analysis rather than re-deriving it, so the
     numbers in a written report and the numbers on the terminal come from one
     implementation and one set of defaults. Adding a threshold here reaches
-    both."""
+    both.
+
+    `calibration` is the sim's calibration module. Every default below is read
+    from its THRESHOLDS table instead of being written here, because every one
+    of them was measured on one sim's flights: a literal in this file would
+    apply Liftoff's numbers to a sim they were never measured against, silently
+    and with nothing to tell a reader it had happened.
+
+    The help text still quotes the Liftoff figures. That is deliberate - it is
+    the evidence for a value, not a second copy of it - but a sim supplying its
+    own thresholds will want to supply its own wording with them."""
+    T = calibration.THRESHOLDS
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("csv")
     ap.add_argument("--laps", help='sample-index ranges, "73:1077,1077:1768"')
-    ap.add_argument("--turn-threshold", type=float, default=25, help="deg/s")
-    ap.add_argument("--speed-floor", type=float, default=15,
+    ap.add_argument("--turn-threshold", type=float, default=T["turn_threshold"], help="deg/s")
+    ap.add_argument("--speed-floor", type=float, default=T["speed_floor"],
                     help="km/h below which sideslip is not meaningful")
-    ap.add_argument("--min-samples", type=int, default=5)
+    ap.add_argument("--min-samples", type=int, default=T["min_samples"])
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--trace", action="store_true",
                     help="print the sample-by-sample stick trace around each stall")
@@ -405,37 +417,37 @@ def build_parser():
         "stall detection",
         "What counts as a stall. All windows are seconds and are converted "
         "through the measured sample interval.")
-    g.add_argument("--stall-speed", type=float, default=10,
+    g.add_argument("--stall-speed", type=float, default=T["stall_speed"],
                    help="km/h below which the quad is not making progress (default 10)")
-    g.add_argument("--stall-min", type=float, default=0.5,
+    g.add_argument("--stall-min", type=float, default=T["stall_min"],
                    help="shortest run worth reporting, seconds (default 0.5)")
-    g.add_argument("--stall-gap", type=float, default=1.0,
+    g.add_argument("--stall-gap", type=float, default=T["stall_gap"],
                    help="bridge sub-runs separated by less than this, seconds "
                         "(default 1.0; one bounce back over the threshold is "
                         "still the same event)")
-    g.add_argument("--idle-throttle", type=float, default=0.05,
+    g.add_argument("--idle-throttle", type=float, default=T["idle_throttle"],
                    help="median throttle below which the run is grid time or a "
                         "dead quad, not a stall (default 0.05)")
 
     g = ap.add_argument_group(
         "stall geometry",
         "Windows used to measure what happened around a stall.")
-    g.add_argument("--lead", type=float, default=1.5,
+    g.add_argument("--lead", type=float, default=T["lead"],
                    help="seconds skipped either side of the stall before "
                         "measuring heading, so the brake and the recovery do not "
                         "contaminate it (default 1.5)")
-    g.add_argument("--pre-window", type=float, default=4.0,
+    g.add_argument("--pre-window", type=float, default=T["pre_window"],
                    help="seconds before the stall used for inbound heading (default 4.0)")
-    g.add_argument("--post-window", type=float, default=4.5,
+    g.add_argument("--post-window", type=float, default=T["post_window"],
                    help="seconds after the stall used for outbound heading (default 4.5)")
-    g.add_argument("--history-window", type=float, default=15.0,
+    g.add_argument("--history-window", type=float, default=T["history_window"],
                    help="how far back the retrace test looks for ground already "
                         "covered, seconds (default 15.0)")
-    g.add_argument("--retrace-exclude", type=float, default=3.0,
+    g.add_argument("--retrace-exclude", type=float, default=T["retrace_exclude"],
                    help="seconds immediately before the stall excluded from the "
                         "retrace test, so the approach itself cannot count as a "
                         "retrace (default 3.0)")
-    g.add_argument("--probe-half-window", type=float, default=2.5,
+    g.add_argument("--probe-half-window", type=float, default=T["probe_half_window"],
                    help="half-width of the window measured on the other lap "
                         "at the same coordinates, seconds (default 2.5)")
 
@@ -443,35 +455,35 @@ def build_parser():
         "stall classification thresholds",
         "The decision table. Each default sits in the gap between the two "
         "groups measured on 2026-08-26; see the module docstring.")
-    g.add_argument("--retrace-m", type=float, default=3.0,
+    g.add_argument("--retrace-m", type=float, default=T["retrace_m"],
                    help="recovery passing within this of earlier ground counts "
                         "as retracing (default 3.0; overruns measured 0.3-0.4 m, "
                         "everything else 7.1 m or more)")
-    g.add_argument("--reversal-deg", type=float, default=120,
+    g.add_argument("--reversal-deg", type=float, default=T["reversal_deg"],
                    help="heading change that counts as doubling back (default "
                         "120; overruns measured 172-174 deg, everything else 105 or less)")
-    g.add_argument("--near-m", type=float, default=15.0,
+    g.add_argument("--near-m", type=float, default=T["near_m"],
                    help="how close another lap must pass for its behaviour to "
                         "be evidence about this spot (default 15.0)")
-    g.add_argument("--corner-deg", type=float, default=30,
+    g.add_argument("--corner-deg", type=float, default=T["corner_deg"],
                    help="heading change that counts as a real corner rather "
                         "than a straight (default 30)")
-    g.add_argument("--offline-m", type=float, default=8.0,
+    g.add_argument("--offline-m", type=float, default=T["offline_m"],
                    help="distance from the other lap's line that is flagged as "
                         "a line error rather than a stick error (default 8.0)")
 
     g = ap.add_argument_group("yaw-only detection")
-    g.add_argument("--yaw-on", type=float, default=0.20,
+    g.add_argument("--yaw-on", type=float, default=T["yaw_on"],
                    help="stick deflection that counts as commanded yaw (default 0.20)")
-    g.add_argument("--roll-off", type=float, default=0.05,
+    g.add_argument("--roll-off", type=float, default=T["roll_off"],
                    help="stick deflection below which roll counts as absent "
                         "(default 0.05)")
     return ap
 
 
-def default_args(csv_path="-"):
+def default_args(csv_path, calibration):
     """Every threshold at its default, for callers that embed the analysis."""
-    return build_parser().parse_args([csv_path])
+    return build_parser(calibration).parse_args([csv_path])
 
 
 def parse_laps(spec, n):
@@ -484,7 +496,7 @@ def parse_laps(spec, n):
 
 
 def analyse(data, ranges, names, dt, args):
-    """The whole analysis, as data. main() prints it; fpv_report.py draws it."""
+    """The whole analysis, as data. the `analyse` command prints it; report.py draws it."""
     report = []
     for k, (a, b) in enumerate(ranges):
         raw = data[a:b]
@@ -533,77 +545,3 @@ def analyse(data, ranges, names, dt, args):
     return report
 
 
-def main():
-    args = build_parser().parse_args()
-    data = load(args.csv, args.speed_floor)
-    dt = sample_dt(data)
-    if args.laps:
-        ranges = parse_laps(args.laps, len(data))
-        names = ["lap %d" % (i + 1) for i in range(len(ranges))]
-    else:
-        ranges = [(0, len(data))]
-        names = ["flight"]
-    report = analyse(data, ranges, names, dt, args)
-
-    if args.json:
-        print(json.dumps(report, indent=2))
-        return
-    for e in report:
-        print("%s  %.1fs" % (e["segment"].upper(), e["duration_s"]))
-        print("  speed     median %3d  p90 %3d  max %3d km/h" %
-              (e["speed_median"], e["speed_p90"], e["speed_max"]))
-        print("  tilt      median %3d  p90 %3d deg" % (e["tilt_median"], e["tilt_p90"]))
-        print("  sideslip  median %.1f  p90 %.1f deg" %
-              (e["sideslip_median"], e["sideslip_p90"]))
-        print("  under 10 km/h: %.1fs" % e["slow_seconds"])
-        if e["corners"]:
-            print("   #   t     entry  min  exit  tilt  slip  radius  thr   d_thr")
-            for i, c in enumerate(e["corners"], 1):
-                print("  %2d %6.1f %6d %5d %5d %5d %5.1f %7s %5.2f %+6.2f" %
-                      (i, c["t"], c["entry_kmh"], c["min_kmh"], c["exit_kmh"],
-                       c["tilt_deg"], c["sideslip_deg"],
-                       c["radius_m"] if c["radius_m"] is not None else "-",
-                       c["throttle_in"], c["throttle_delta"]))
-        y = e["yaw_only"]
-        if y["yaw_only_pct"] is not None:
-            print("  yaw-only  %.1fs of %.1fs commanded yaw (%d%%) at mean %s km/h"
-                  % (y["yaw_only_seconds"], y["yaw_seconds"], y["yaw_only_pct"],
-                     y["yaw_only_mean_kmh"] if y["yaw_only_mean_kmh"] is not None else "-"))
-            print("            " + "   ".join(
-                "%s: roll p90 %.2f / yaw p90 %.2f" %
-                (b["band"], b["roll_p90"], b["yaw_p90"]) for b in y["bands"]))
-        if e["stalls"]:
-            print("  stalls")
-            print("   #   t     dur  min   turn  retrace   net  verdict      because")
-            for i, s in enumerate(e["stalls"], 1):
-                f = lambda v, w, d=1: (("%%%d.%df" % (w, d)) % v) if v is not None else "-".rjust(w)
-                print("  %2d %6.1f %5.1f %5.1f %s %s %s  %-12s %s%s" %
-                      (i, s["t"], s["duration_s"], s["min_kmh"],
-                       ("%+6.0f" % s["turn_deg"]) if s["turn_deg"] is not None else "     -",
-                       f(s["retrace_m"], 8), f(s["net_m"], 6),
-                       s["verdict"], s["why"],
-                       "  [OFF LINE by %.1f m]" % s["other_lap"]["dist_m"]
-                       if s["off_line"] else ""))
-            if not args.laps or len(report) < 2:
-                print("   (single segment: no cross-lap evidence, verdicts marked ? "
-                      "rest on the reversal test alone)")
-        if args.trace and e["stalls"]:
-            for i, s in enumerate(e["stalls"], 1):
-                a2, b2 = s["index"]
-                lo = max(0, a2 - int(round(args.pre_window / dt)))
-                hi = min(len(data), b2 + int(round(args.post_window / dt)))
-                print()
-                print("  --- stall %d at t=%.1f (%s) ---" % (i, s["t"], s["verdict"]))
-                print("      t    spd   alt  tilt  slip   thr    yaw   pitch   roll")
-                step = max(1, int(round(0.3 / dt)))
-                for j in range(lo, hi, step):
-                    d = data[j]
-                    print("  %7.1f %5.1f %5.1f %5.0f %5s %5.2f %+6.2f %+6.2f %+6.2f" %
-                          (d["t"] - data[0]["t"], d["spd"], d["alt"], d["tilt"],
-                           "%.0f" % abs(d["slip"]) if d["slip"] is not None else "-",
-                           d["thr"], d["yaw"], d["pitch"], d["roll"]))
-        print()
-
-
-if __name__ == "__main__":
-    main()

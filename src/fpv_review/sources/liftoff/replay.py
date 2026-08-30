@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_replay.py - decode a saved Liftoff replay into CSV.
+replay.py - decode a saved Liftoff replay into CSV.
 
 Liftoff's in-game "save recording" writes an XML file per attempt. It is not a
 video and not an opaque blob: the flight itself is a base64 block of fixed-size
@@ -46,16 +46,15 @@ when re-running against a file already archived.
 
 Usage
 -----
-  python liftoff_replay.py --list
-  python liftoff_replay.py "path/to/replay.xml" -o flight.csv
-  python liftoff_replay.py --latest -o flight.csv
+  python "<clone>/src" replay --list
+  python "<clone>/src" replay "path/to/replay.xml" -o flight.csv
+  python "<clone>/src" replay --latest -o flight.csv
 """
 
 import argparse
 import base64
 import csv
 import json
-import math
 import os
 import shutil
 import struct
@@ -64,51 +63,14 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
+from fpv_review.common import kinematics
+from fpv_review.common import schema
+
 DEFAULT_ROOT = (Path(os.environ.get("LOCALAPPDATA", "")).parent / "LocalLow" /
                 "LuGus Studios" / "Liftoff" / "Recordings")
 
 RECORD_BYTES = 48
 RECORD_FLOATS = 12
-COLUMNS = ["t", "pos_x", "pos_y", "pos_z", "quat_x", "quat_y", "quat_z", "quat_w",
-           "in_throttle", "in_yaw", "in_pitch", "in_roll",
-           "vel_x", "vel_y", "vel_z", "speed_ms", "speed_kmh"]
-
-
-def mounted_via_link():
-    """True when this toolkit is being run through a symlink or junction.
-
-    Someone who clones the repo and works inside it is running the real path,
-    and writing their replays and reports there is exactly right. Someone who
-    has mounted the toolkit into another project - as a skill, say - is running
-    a linked path, and for them the toolkit directory is shared code that their
-    own flight data must never leak into.
-
-    Comparing the invoked path with the resolved one distinguishes the two
-    without any configuration to forget."""
-    here = os.path.abspath(__file__)
-    return os.path.normcase(here) != os.path.normcase(os.path.realpath(here))
-
-
-TOOLKIT_ROOT = Path(os.path.realpath(__file__)).parent.parent
-
-
-def refuse_inside_toolkit(target, what):
-    """Hard stop before writing personal data into shared code.
-
-    Only fires when the toolkit is mounted via a link, so it cannot get in the
-    way of the ordinary clone-and-run case. `.gitignore` already covers these
-    paths, but an ignore rule is one `git add -f` away from being wrong, and it
-    does nothing about the data physically sitting in a public checkout."""
-    if not mounted_via_link():
-        return
-    t = Path(os.path.realpath(str(target)))
-    if t == TOOLKIT_ROOT or TOOLKIT_ROOT in t.parents:
-        sys.exit(
-            "refusing to write %s inside the toolkit.\n"
-            "  toolkit: %s\n"
-            "  target:  %s\n"
-            "This toolkit is mounted through a link, so it is shared code and may "
-            "be public. Pass a path in your own project instead." % (what, TOOLKIT_ROOT, t))
 
 
 def find_replays(root):
@@ -200,28 +162,12 @@ def parse(path):
     return meta, rows
 
 
-def add_velocity(rows):
-    """Central-difference velocity from position.
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
 
-    The replay stores no velocity, unlike the live feed. At 10 Hz a central
-    difference is good enough for trajectory work; do not read fine control
-    detail into it.
-    """
-    out = []
-    for i, r in enumerate(rows):
-        a = rows[max(0, i - 1)]
-        b = rows[min(len(rows) - 1, i + 1)]
-        dt = b[0] - a[0]
-        if dt <= 0:
-            vx = vy = vz = 0.0
-        else:
-            vx, vy, vz = (b[1] - a[1]) / dt, (b[2] - a[2]) / dt, (b[3] - a[3]) / dt
-        sp = math.sqrt(vx * vx + vy * vy + vz * vz)
-        out.append(r + [vx, vy, vz, sp, sp * 3.6])
-    return out
-
-
-def main():
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("replay", nargs="?", help="replay xml to decode")
@@ -234,7 +180,10 @@ def main():
                     help="where timestamped copies are kept (default: ./replays)")
     ap.add_argument("--no-archive", action="store_true",
                     help="skip the safety copy; only for a file already archived")
-    args = ap.parse_args()
+    return ap
+
+
+def run(args):
 
     if args.list:
         found = find_replays(args.root)
@@ -258,7 +207,7 @@ def main():
         path = archived            # decode the copy, never the volatile original
 
     meta, rows = parse(path)
-    rows = add_velocity(rows)
+    rows = kinematics.add_velocity(rows)
 
     if args.json:
         print(json.dumps(meta, indent=2))
@@ -287,11 +236,7 @@ def main():
     if args.out:
         with open(args.out, "w", newline="") as fh:
             w = csv.writer(fh)
-            w.writerow(COLUMNS)
+            w.writerow(schema.COLUMNS)
             for r in rows:
                 w.writerow([round(x, 6) for x in r])
         print("wrote %s" % args.out)
-
-
-if __name__ == "__main__":
-    main()

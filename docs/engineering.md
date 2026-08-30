@@ -6,31 +6,53 @@ Turn a Liftoff: FPV Drone Racing flight into coaching data.
 decoding a replay, measuring a flight, writing a report, extracting the track
 XMLs. Nothing to install, nothing to pin, portable as a folder copy.
 
-**Two scripts need `UnityPy`, and only when building a cache.** `liftoff_scene.py`
-and `liftoff_props.py` read the game's compiled scene and prefab bundles, which
+**Two commands need `UnityPy`, and only when building a cache.** `scene`
+and `props` read the game's compiled scene and prefab bundles, which
 means generic Unity object parsing and, for collision meshes, vertex buffer
 decoding. That is disproportionate to hand-roll for a step that runs once per
 environment per game patch. What they produce is plain JSON, so everything that
 *reads* a cache still needs nothing.
 
-| script | what it does | needs |
+| command — module | what it does | needs |
 |---|---|---|
-| `fpv_report.py` | **the normal entry point** — replay in, illustrated Markdown debrief out | — |
-| `liftoff_replay.py` | archive + decode a saved in-game replay to CSV | — |
-| `analyze_flight.py` | flight geometry: sideslip, tilt, turn radius, corners, yaw-only time, and stalls classified as overrun / corner / hesitation | — |
-| `liftoff_pbs.py` | personal bests per track, with snapshot history | — |
-| `liftoff_tracks.py` | extract the game's track and race geometry: where the gates are | — |
-| `liftoff_scene.py` | an environment's collision geometry, and the cull to one incident | UnityPy |
-| `liftoff_props.py` | collider shapes for the items a track is built from | UnityPy |
-| `liftoff_view.py` | the 3D incident view: geometry, path, orbit, scrub — as its own page, and as the recordings inside a report | — |
-| `liftoff_telemetry.py` | live UDP feed at 100 Hz — only source of gyro/RPM | — |
+| `report` — `common/report.py` | **the normal entry point** — replay in, illustrated Markdown debrief out | — |
+| `replay` — `sources/liftoff/replay.py` | archive + decode a saved in-game replay to CSV | — |
+| `analyse` — `common/analysis.py` | flight geometry: sideslip, tilt, turn radius, corners, yaw-only time, and stalls classified as overrun / corner / hesitation | — |
+| `pbs` — `sources/liftoff/pbs.py` + `common/pbs.py` | personal bests per track, with snapshot history | — |
+| `tracks` — `sources/liftoff/tracks.py` | extract the game's track and race geometry: where the gates are | — |
+| `scene` — `sources/liftoff/scene.py` | an environment's collision geometry, and the cull to one incident | UnityPy |
+| `props` — `sources/liftoff/props.py` | collider shapes for the items a track is built from | UnityPy |
+| `view` — `common/incident_view.py` | the 3D incident view: geometry, path, orbit, scrub — as its own page, and as the recordings inside a report | — |
+| `telemetry` — `sources/liftoff/telemetry.py` | live UDP feed at 100 Hz — only source of gyro/RPM | — |
+
+
+### Where the code lives
+
+```
+SKILL.md                    the orchestration layer Claude Code loads
+pyproject.toml              metadata only; also a marker for the toolkit-root search
+src/__main__.py             the front door: python "<clone>/src" <command>
+src/fpv_review/cli.py       the wiring layer, and the only module importing both trees
+src/fpv_review/common/      sim-agnostic: schema, analysis, report, incident view
+src/fpv_review/sources/     one package per sim; today only liftoff/
+docs/adr/                   the decisions, with the alternatives they beat
+```
+
+The import rule is the architecture: `common/` may import `common/` and the
+standard library; `sources/<sim>/` may import `common/` and its own siblings,
+never another sim; `cli.py` is the only module allowed to import both. See
+[`adr/0001-multi-sim-architecture.md`](adr/0001-multi-sim-architecture.md).
 
 ## The normal run
 
 ```bash
-python liftoff_tracks.py --check     # first: is the track geometry present and current?
-python fpv_report.py --latest        # archive, decode, analyse, draw, write, show
-python liftoff_pbs.py --save
+# $FPV is wherever this repository was cloned. Every command below uses it;
+# in PowerShell the same lines work with backslashes and $FPV set the same way.
+FPV="$HOME/.claude/skills/fpv-review"
+
+python "$FPV/src" tracks --check     # first: is the track geometry present and current?
+python "$FPV/src" report --latest        # archive, decode, analyse, draw, write, show
+python "$FPV/src" pbs --save
 ```
 
 `report.html` opens in the default browser when it is written. The report is the
@@ -97,7 +119,7 @@ inside the page: the environment, the track props, the flown path coloured by
 speed, the quad at its true attitude, every impact marked. Orbit, zoom, scrub,
 play, close.
 
-- **The renderer is `liftoff_view.py`, imported.** `build()` cuts the window and
+- **The renderer is `common/incident_view.py`, imported.** `build()` cuts the window and
   `VIEWER_JS` draws it, for the standalone page and for the report alike. There
   is one projection, one playback loop, and one place to fix either.
 - **Crashes are found in the trajectory.** Twenty km/h or more lost inside one
@@ -163,8 +185,8 @@ For a quick number mid-conversation, the two lower-level steps still work on
 their own:
 
 ```bash
-python liftoff_replay.py --latest --archive-dir replays -o flight.csv
-python analyze_flight.py flight.csv --laps "73:1077,1077:1768"
+python "$FPV/src" replay --latest --archive-dir replays -o flight.csv
+python "$FPV/src" analyse flight.csv --laps "73:1077,1077:1768"
 ```
 
 Lap ranges are sample indices, from the replay metadata: `lapStartIndices[i]` to
@@ -182,12 +204,12 @@ On Windows `<LocalLow>` is `%USERPROFILE%/AppData/LocalLow`.
 
 **Replays are volatile.** Liftoff names a replay after its track and its total
 time, so every abandoned attempt on one track lands on the same filename and each
-save destroys the previous one. `liftoff_replay.py` therefore copies to a
+save destroys the previous one. The `replay` decoder therefore copies to a
 timestamped name *before* decoding, and decodes the copy. The archive is the
 durable record; `Recordings/` is scratch space.
 
 **Personal bests are a ratchet.** `raceTimes.xml` and `lapTimes.xml` are
-overwritten in place, so a beaten time is gone. `liftoff_pbs.py --save` snapshots
+overwritten in place, so a beaten time is gone. `pbs --save` snapshots
 them to `data/liftoff_history.json`. Run it every session — it is also the only
 way to see flights that were never saved as replays.
 
@@ -197,17 +219,17 @@ A replay says where the quad went. It does not say where the track was. Without
 the gates, "he went wide" is an opinion; with them it is a lateral offset
 through a 2.45 m aperture.
 
-`liftoff_tracks.py` finds the Liftoff install — every Steam library named by the
+The `tracks` command finds the Liftoff install — every Steam library named by the
 registry and `libraryfolders.vdf`, or `--game-dir` / `$LIFTOFF_DIR` — and writes
 the game's own track and race XMLs out of its Unity bundles into `trackdata/`,
 about five seconds for all 184.
 
 ```bash
-python liftoff_tracks.py --check                          # ready? exit 1 if not
-python liftoff_tracks.py                                  # rebuild; no-op if current
-python liftoff_tracks.py --for-replay replays/<file>.xml  # which track was flown
-python liftoff_tracks.py --gates "03 - Stuff That Works"  # the route, with geometry
-python liftoff_tracks.py --list                           # every track, by environment
+python "$FPV/src" tracks --check                          # ready? exit 1 if not
+python "$FPV/src" tracks                                  # rebuild; no-op if current
+python "$FPV/src" tracks --for-replay replays/<file>.xml  # which track was flown
+python "$FPV/src" tracks --gates "03 - Stuff That Works"  # the route, with geometry
+python "$FPV/src" tracks --list                           # every track, by environment
 ```
 
 **The extracted XMLs are game assets: gitignored, never committed, never
@@ -253,13 +275,13 @@ measuring its collider in the scene bundle.
 
 ## Collision geometry, and the 3D incident view
 
-`liftoff_tracks.py` says where the gates are. `liftoff_scene.py` and
-`liftoff_props.py` say where the *world* is — what a crash actually hit.
+`tracks` says where the gates are. `scene` and
+`props` say where the *world* is — what a crash actually hit.
 
 ```bash
-python liftoff_scene.py --environment LiftoffArena --witness replays/<a flight there>.xml
-python liftoff_props.py
-python liftoff_view.py --replay replays/<crash>.xml -o crash.html
+python "$FPV/src" scene --environment LiftoffArena --witness replays/<a flight there>.xml
+python "$FPV/src" props
+python "$FPV/src" view --replay replays/<crash>.xml -o crash.html
 ```
 
 Cache an environment once and every later report of a flight there gets its
@@ -272,7 +294,7 @@ Three sources, because a track is assembled from three:
 |---|---|---|
 | scene cache | the static environment: walls, floors, structures | the environment's scene bundle |
 | prop table | the shape of every item a track places, in the item's own frame | the prefab bundles |
-| Track XML | where each item sits, and its yaw | `liftoff_tracks.py` |
+| Track XML | where each item sits, and its yaw | `tracks` |
 
 **The scene alone is not enough, and this is the trap.** Track props are placed
 by the Track XML and instantiated at runtime, so they are *not* in the scene
@@ -304,7 +326,7 @@ Three things that are easy to get wrong, all of which were:
 
 Still not extracted: scene MeshColliders and TerrainColliders. Outdoor grounds
 live in those, so an outdoor scene renders its obstacles over no floor. A scene
-reports what it skipped, and `liftoff_view.py` says so on the page.
+reports what it skipped, and the incident view says so on the page.
 
 ### Why this parses Unity bundles by hand
 
@@ -346,7 +368,7 @@ replay - 1`.
 A run with empty `lapTimes` and a `00_00_000` name is an abandoned attempt. Still
 analysable as one segment, just not lap by lap.
 
-## What analyze_flight.py measures
+## What the analysis measures
 
 * **Sideslip** — the signed angle between where the nose points and where the
   quad is travelling. The key diagnostic: yawing faster than bank-plus-throttle
@@ -417,7 +439,7 @@ or telemetry CSV (100 Hz, velocity measured).
 
 ## Live telemetry — dormant, kept deliberately
 
-`liftoff_telemetry.py` receives Liftoff's UDP stream: everything the replay has,
+The `telemetry` command receives Liftoff's UDP stream: everything the replay has,
 at 100 Hz, plus gyro, battery and motor RPM. It must be running during the
 flight, which is why replays are the default source instead.
 
@@ -427,14 +449,14 @@ machine via `TelemetryConfiguration.json` (`127.0.0.1:9001`), so deleting the
 receiver would orphan a live config. Delete both together or neither.
 
 ```bash
-python liftoff_telemetry.py --probe          # confirm the feed
-python liftoff_telemetry.py -o flight.csv    # record until Ctrl+C
+python "$FPV/src" telemetry --probe          # confirm the feed
+python "$FPV/src" telemetry -o flight.csv    # record until Ctrl+C
 ```
 
 ## The report
 
-`fpv_report.py` is the reason the other scripts exist. It embeds
-`analyze_flight.py` rather than re-deriving anything — it calls `build_parser()`
+`common/report.py` is the reason the other modules exist. It embeds
+`common/analysis.py` rather than re-deriving anything — it calls `build_parser()`
 for the thresholds and `analyse()` for the numbers — so a figure and a table can
 never disagree, and a threshold added there reaches both.
 
@@ -501,7 +523,7 @@ Four decisions that are not arbitrary:
   last bearing. A stopped quad has no direction of travel, and drawing one would
   be a lie at the moment the figure matters most.
 * **The red flag is recomputed from raw geometry**, not read from the `slip`
-  column. `analyze_flight` leaves sideslip undefined below `--speed-floor`
+  column. The analysis leaves sideslip undefined below `--speed-floor`
   because the *statistic* is meaningless down there — correct for a median, but
   the pirouette lives below that floor, and reusing the field would grey the
   arrow out exactly when it should be shouting.

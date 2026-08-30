@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_props.py - collider shapes for the items a track is built from.
+props.py - collider shapes for the items a track is built from.
 
 A Track XML says a `GenericRamp01` sits at (x, y, z) turned 47 degrees. It does
 not say what a GenericRamp01 IS. That shape lives in a prefab, and without it
@@ -11,9 +11,9 @@ This scans the game's prefab bundles once and writes `props.json`: for each
 `itemID`, its colliders in the prefab's OWN frame. Placing one is then just the
 Track XML's position and yaw applied to that shape.
 
-    python liftoff_props.py                      # build the table
-    python liftoff_props.py --show GenericRamp01 # what one item looks like
-    python liftoff_props.py --check              # is it present and current?
+    python "<clone>/src" props                      # build the table
+    python "<clone>/src" props --show GenericRamp01 # what one item looks like
+    python "<clone>/src" props --check              # is it present and current?
 
 Prefabs are name-keyed, which is the whole reason this is cheap: a GameObject
 literally called `ConradCrowdControlBarrier01` is the barrier the Track XML
@@ -31,7 +31,7 @@ across 92 tracks, instead of geometry baked per instance.
 
 WHAT IS SKIPPED
 ---------------
-MeshColliders, as in `liftoff_scene.py`. Most track furniture is boxes and
+MeshColliders, as in `scene.py`. Most track furniture is boxes and
 capsules, but a few shapes - some arches especially - are mesh-only and will
 come out empty. An item with no primitive colliders is recorded with an empty
 list rather than omitted, so a consumer can tell "known to have no box shape"
@@ -47,10 +47,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import liftoff_replay as LR
-import liftoff_scene as LS
-import liftoff_tracks as LT
+from fpv_review.common import geometry
+from fpv_review.common import toolkit
+from fpv_review.sources.liftoff import scene
+from fpv_review.sources.liftoff import tracks
 
 FORMAT = 1
 MAX_BUNDLE_MB = 250
@@ -58,11 +58,11 @@ MAX_BUNDLE_MB = 250
 
 def wanted_items(track_dir):
     """Every distinct itemID placed by any shipped track."""
-    index = LT.load_index(track_dir)
+    index = tracks.load_index(track_dir)
     names = set()
     for track in index["tracks"].values():
-        root = LT.parse_xml(Path(track_dir) / track["file"])
-        for item in LT.blueprints(root).values():
+        root = tracks.parse_xml(Path(track_dir) / track["file"])
+        for item in tracks.blueprints(root).values():
             if item["item"]:
                 names.add(item["item"])
     return names
@@ -78,7 +78,7 @@ def cab_index(bundles):
     out = {}
     for path in Path(bundles).glob("*.bundle"):
         try:
-            for name in LS._node_names(path):
+            for name in scene._node_names(path):
                 out[name.lower()] = path.name
         except Exception:
             continue
@@ -236,13 +236,13 @@ def prefab_colliders(env, want, bundles=None, cabs=None):
         if root_tid is None:
             continue
         owner_root = root_ids[root_tid]
-        wp, wq, ws = LS.compose(transforms, tid, cache)
-        rp, rq, rs = LS.compose(transforms, root_tid, cache)
+        wp, wq, ws = scene.compose(transforms, tid, cache)
+        rp, rq, rs = scene.compose(transforms, root_tid, cache)
         inv = qconj(rq)
         delta = (wp[0] - rp[0], wp[1] - rp[1], wp[2] - rp[2])
-        lp = LS.qrot(inv, delta)
+        lp = geometry.qrot(inv, delta)
         lp = [lp[i] / (rs[i] if abs(rs[i]) > 1e-6 else 1.0) for i in range(3)]
-        lq = LS.qmul(inv, wq)
+        lq = geometry.qmul(inv, wq)
         ls = [ws[i] / (rs[i] if abs(rs[i]) > 1e-6 else 1.0) for i in range(3)]
 
         if kind == "mesh":
@@ -251,14 +251,14 @@ def prefab_colliders(env, want, bundles=None, cabs=None):
             verts = []
             for v in centre:
                 sv = (v[0] * ls[0], v[1] * ls[1], v[2] * ls[2])
-                rv = LS.qrot(lq, sv)
+                rv = geometry.qrot(lq, sv)
                 verts.append([round(lp[i] + rv[i], 3) for i in range(3)])
             per_root.setdefault((owner_root, root_tid), []).append(
                 {"t": "mesh", "v": verts, "f": [list(f) for f in size],
                  **({"trig": 1} if is_trigger else {})})
             continue
 
-        offset = LS.qrot(lq, (centre[0] * ls[0], centre[1] * ls[1], centre[2] * ls[2]))
+        offset = geometry.qrot(lq, (centre[0] * ls[0], centre[1] * ls[1], centre[2] * ls[2]))
         p = [round(lp[i] + offset[i], 3) for i in range(3)]
         if kind == "box":
             half = [round(abs(size[i] * ls[i]) / 2.0, 3) for i in range(3)]
@@ -295,16 +295,16 @@ def prefab_colliders(env, want, bundles=None, cabs=None):
 
 
 def build(track_dir, out_path, max_mb=MAX_BUNDLE_MB):
-    UnityPy = LS.need_unitypy()
-    game = LT.find_game()
+    UnityPy = scene.need_unitypy()
+    game = tracks.find_game()
     if game is None:
         sys.exit("could not find the Liftoff install.")
-    LR.refuse_inside_toolkit(Path(out_path).parent, "extracted prop geometry")
+    toolkit.refuse_inside_toolkit(Path(out_path).parent, "extracted prop geometry")
 
     want = wanted_items(track_dir)
     print("%d distinct items placed across all shipped tracks" % len(want))
-    bundles = LT.bundle_dir(game)
-    scenes = {p.name for p in LS.scene_bundles(bundles)}
+    bundles = tracks.bundle_dir(game)
+    scenes = {p.name for p in scene.scene_bundles(bundles)}
     candidates = sorted((p for p in bundles.glob("*.bundle")
                          if p.name not in scenes and p.stat().st_size <= max_mb * 1024 * 1024),
                         key=lambda p: p.stat().st_size)
@@ -333,14 +333,14 @@ def build(track_dir, out_path, max_mb=MAX_BUNDLE_MB):
             if solid:
                 pts = [c["p"] for c in solid if "p" in c]
                 pts += [v for c in solid for v in c.get("v", [])]
-                lo, hi = LS.bounds_of(pts) if pts else ([0,0,0],[0,0,0])
+                lo, hi = geometry.bounds_of(pts) if pts else ([0,0,0],[0,0,0])
                 items[name]["bounds"] = {"min": [round(v, 2) for v in lo],
                                          "max": [round(v, 2) for v in hi]}
 
     table = {
         "format": FORMAT,
         "generated": datetime.now().isoformat(timespec="seconds"),
-        "source": {"build_id": LT.build_id(game), "unity_version": LS.unity_version()},
+        "source": {"build_id": tracks.build_id(game), "unity_version": scene.unity_version()},
         "counts": {"wanted": len(want), "found": len(items),
                    "with_shape": sum(1 for v in items.values()
                                      if any(not c.get("trig") for c in v["colliders"]))},
@@ -365,7 +365,12 @@ def load(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--track-dir", default="trackdata")
@@ -374,7 +379,10 @@ def main():
     ap.add_argument("--check", action="store_true", help="present and current? exit 1 if not")
     ap.add_argument("--show", metavar="ITEM", help="print one item's collider shape")
     ap.add_argument("--max-bundle-mb", type=int, default=MAX_BUNDLE_MB)
-    args = ap.parse_args()
+    return ap
+
+
+def run(args):
     out = Path(args.out) if args.out else Path(args.track_dir) / "props.json"
 
     if args.check:
@@ -382,8 +390,8 @@ def main():
             print("prop shapes NOT READY: no %s" % out)
             sys.exit(1)
         table = load(out)
-        game = LT.find_game()
-        now = LT.build_id(game) if game else None
+        game = tracks.find_game()
+        now = tracks.build_id(game) if game else None
         stale = now and table["source"].get("build_id") != now
         print("prop shapes %s: %d items, %d with shape%s"
               % ("NOT READY" if stale else "READY", table["counts"]["found"],
@@ -425,7 +433,3 @@ def main():
               % (out, table["counts"]["found"], table["generated"]))
         return
     build(args.track_dir, out, args.max_bundle_mb)
-
-
-if __name__ == "__main__":
-    main()

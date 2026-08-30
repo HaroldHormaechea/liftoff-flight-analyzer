@@ -359,9 +359,22 @@ It was then **broken on purpose**. Seven defects were seeded into a copy of the 
 | # | change | where it shows, verified against the frozen baseline |
 |---|---|---|
 | 1 | the `capabilities` key | `analysis.json`, all four |
-| 2 | footer attribution — `generated … by \`fpv_report.py\`` | **all four `report.md`** |
-| 3 | uncached-scene note — `scene is not cached (liftoff_scene.py)` | **the Woodpecker's `report.html`** only |
-| 4 | uncached-props note — `prop shapes are not cached (liftoff_props.py)` | if any replay triggers it |
+| 2 | footer attribution — `generated … by \`fpv_report.py\`` | **8 occurrences — 4 `report.md` AND 4 `report.html`** (corrected 2026-08-30) |
+| 3 | uncached-scene note — `scene is not cached (liftoff_scene.py)` | **the Woodpecker's `report.html`** only — never `report.md`, since it lives in the html-only recording payload |
+| 4 | uncached-props note — `prop shapes are not cached (liftoff_props.py)` | **0 — does not fire on this set**, `props.json` is cached for every environment flown. Nothing to expect. |
+
+**The footer count was originally recorded as 4 and that was wrong.** The lead's grep matched only the markdown backtick form; in HTML the backticks render as `<code>` tags, so `by <code>fpv_report.py</code>` did not match. A comparison expecting 4 would have flagged the other 4 as real regressions — the exact shape of the false alarm that erodes trust in a check.
+
+**The standalone pages are NOT affected.** They contain no script filename at all, so they remain a strict `cmp` with nothing excused. What changes is the Woodpecker **refusal message on stderr**, and that case writes no file — so the two checks do not collide. The message text is pre-declared; **the exit code 1 and the fact of refusing are not, and must hold.**
+
+### `--declared` enforces the declarations rather than merely excusing them
+
+`compare-tree.py` takes `--declared` alongside `--allow-capabilities`. It normalises the declared strings to placeholders on **both** sides, so it needs no advance knowledge of the replacement, and it **prints every before → after token** rather than swallowing it (`attribution ['fpv_report.py'] → ['fpv-review']`). An excused difference is precisely where a real regression hides, so it also enforces two things:
+
+- **The fixed-string constraint, mechanically.** If the new attribution looks like a path, the comparison **fails**. Tested with `C:/dev/…/common/report.py` — caught, with the reason given. The constraint below is therefore enforced by the tool, not left resting on the developer's care.
+- **Vanishing is not renaming.** If a declared string is present before and absent after, it **fails**. Deleting the uncached-scene note would otherwise sail straight through `--declared`, and that note *is* the project's stated "degrade visibly" guarantee. Also tested and caught.
+
+Both flags are **A–E only**. On the E-vs-F pass both trees carry the new strings, so any difference there is real.
 
 **Hard constraint on the new footer text: a fixed string, never a path.** If it embeds the clone location or anything machine-dependent, every generated report becomes irreproducible across machines and the baseline comparison breaks for a reason unrelated to this migration.
 

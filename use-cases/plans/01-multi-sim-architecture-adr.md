@@ -316,6 +316,25 @@ QA built a faithful mutant of the trap the developer found in B3 (call sites rew
 
 **Layer 2** opens each recording by a real click (`[data-rec="<id>"]`), via headless Chrome over the DevTools protocol with no third-party dependency, collecting `Runtime.exceptionThrown`, console errors and Log entries. Its second, independent assertion is sharper than "no error logged": the viewer draws into a **2D canvas** and `draw()` paints the background *first*, so a throw inside the geometry loop leaves a canvas of exactly **one distinct colour**. Colour count is therefore a direct liveness signal. Baseline references: Woodpecker 1 recording, 714×257, 629 colours; canary 11 recordings, 1,610–3,064 colours each, all opening without error; LiftoffArena's 2 to be captured at verification time. Both signals fired independently on the mutant.
 
+### Layer 2 must be told how many recordings to expect
+
+A probe that only checks what a page *offers* is silent when the page offers nothing. Run against the pinned Rustline replay — which legitimately has zero recordings — layer 2 opened zero, found no error and reported **PASS**. Correct for that replay, and useless as a guarantee: if the migration made recordings *vanish* from a report that should have them, the check would have passed. That is the same failure shape as the JavaScript trap itself — a check that is quiet exactly where it should be loud.
+
+**Closed by passing the baseline recording count as an argument; a mismatch fails.** Verified in both directions (told to expect 5 where there are 0, it fails with `RECORDING COUNT CHANGED: page offers 0, baseline had 5`; given the true counts 1 / 0 / 2 / 11, all four pass). **Always pass the expected count.**
+
+**Baseline viewer references** (canvas 714×257 throughout; all opened by a real click, no exceptions, no console errors):
+
+| replay | recordings | distinct colours |
+|---|---|---|
+| TheRussianWoodpecker | 1 | crash-1 629 |
+| LiftoffArena | 2 | crash-1 4401, crash-2 2131 |
+| Rustline canary | 11 | crash-1 2398; stall-1-1…-10: 2038, 1610, 1869, 2330, 1875, 1947, 3018, 2941, 3064, 2412 |
+| Rustline pinned | 0 | — |
+
+The *ordering* is itself a check: LiftoffArena's `crash-1` has the richest scene (1,870 culled colliders) and draws the most colours; the Woodpecker's degraded path-only recording draws the fewest. **If those relationships invert after the migration, something is wrong even if nothing throws.** But treat the numbers as a shape, not a fingerprint — the failure signal is a count of **1** (background only, scene never drew) or a large collapse, never a small drift. 2398 versus 2401 is not a regression.
+
+**Both checks are durable artifacts beside the baseline**, not session-scoped snippets: `C:\dev\liftoff-uc01-baseline\check-script-prefixes.py` (layer 1) and `C:\dev\liftoff-uc01-baseline\viewer-probe.mjs` (layer 2, usage `<report.html> <port> <expected-count>`). Each carries a comment block explaining what it catches and why the obvious simpler version fails. `COMMANDS.txt` holds the full verification contract — both invocations, the colour table, the expected-count rule, the comparison scope, and an explicit note that **neither layer catches a mis-bound `bounds_of`**, with what does.
+
 **Measured noise floor.** The same command run twice against unchanged code, into two different `-o` directories, differs **only** in `analysis.json`'s `generated` (second granularity) and the `report.md` / `report.html` footer timestamp (minute granularity). **Every SVG asset and `flight.csv` were byte-identical.** Anything else that differs is a regression.
 
 **Two corrections to §15's expectations:**

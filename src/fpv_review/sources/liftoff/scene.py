@@ -73,7 +73,6 @@ per environment per game patch.
 """
 
 import argparse
-import csv
 import json
 import math
 import os
@@ -84,7 +83,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fpv_review.common import geometry
-
+from fpv_review.common import schema
 from fpv_review.common import toolkit
 from fpv_review.sources.liftoff import replay
 from fpv_review.sources.liftoff import tracks
@@ -467,18 +466,16 @@ def load_scene(out_dir, environment):
 
 
 def path_window(flight_csv, at, pad):
-    """The quad's positions between at-pad and at+pad, from a decoded flight."""
-    points = []
-    with open(flight_csv, newline="") as fh:
-        rows = list(csv.DictReader(fh))
-    if not rows:
-        return points
-    t0 = float(rows[0]["t"])
-    for row in rows:
-        t = float(row["t"]) - t0
-        if at - pad <= t <= at + pad:
-            points.append((t, (float(row["pos_x"]), float(row["pos_y"]), float(row["pos_z"]))))
-    return points
+    """The quad's positions between at-pad and at+pad, from a decoded flight.
+
+    Reads through common/schema.py rather than opening the CSV with a third
+    independent DictReader of its own. There was one here, one in the analysis
+    and one in the report, each with its own idea of what a column meant."""
+    series = schema.read_csv(flight_csv)
+    if not len(series):
+        return []
+    t0 = series[0].t
+    return [(s.t - t0, s.pos) for s in series if at - pad <= s.t - t0 <= at + pad]
 
 
 # ----------------------------------------------------------------------- main

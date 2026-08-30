@@ -61,7 +61,6 @@ refresh that tab. A batch run wants the flag too. --no-open is the older
 spelling and still works.
 """
 
-import csv
 import json
 import math
 import os
@@ -234,11 +233,18 @@ def unwrap(seq):
     return out
 
 
-def load_samples(csv_path, args):
-    """analyze_flight.load, plus the nose bearing it computes and discards."""
-    data = analysis.load(csv_path, args.speed_floor)
-    for s, r in zip(data, csv.DictReader(open(csv_path))):
-        q = (float(r["quat_x"]), float(r["quat_y"]), float(r["quat_z"]), float(r["quat_w"]))
+def load_samples(series, args):
+    """analysis.load, plus the nose bearing it computes and discards.
+
+    This used to open flight.csv a second time to re-read the quaternions. It
+    now walks the same series analysis.load() was given, so the file is opened
+    once by the schema layer and never again."""
+    data = analysis.load(series, args.speed_floor)
+    for s, sample in zip(data, series):
+        # Quantised exactly as analysis.load() quantises: the old second pass
+        # read the 6-decimal CSV values, so the nose bearing was computed from
+        # those. Removed with the rest of the parity measure.
+        q = tuple(round(v, 6) for v in sample.attitude)
         f = analysis.rotate(q, (0, 0, 1))
         s["nose"] = math.degrees(math.atan2(f[0], f[2]))
     return data
@@ -882,28 +888,28 @@ class Pool:
 
 
 
-def find_crashes(rows, hits, ranges, names):
+def find_crashes(series, hits, ranges, names):
     """One record per impact: when, how hard, where in the run, and how high.
 
     `hits` comes from the trajectory, not from the replay's isCrashed flag,
     which reads false on flights that ended pinned against the ground - see
     liftoff_view.impacts()."""
-    t0 = rows[0][0]
+    t0 = series[0].t
     out = []
     for n, i in enumerate(hits, 1):
         seg = next((names[k] for k, (a, b) in enumerate(ranges) if a <= i < b), "-")
         out.append({
             "n": n,
             "index": i,
-            "t": round(rows[i][0] - t0, 1),
+            "t": round(series[i].t - t0, 1),
             "segment": seg,
-            "entry_kmh": round(rows[max(0, i - 1)][16], 1),
-            "min_kmh": round(rows[i][16], 1),
-            "drop_kmh": round(rows[max(0, i - 1)][16] - rows[i][16], 1),
-            "height_m": round(rows[i][2], 2),
+            "entry_kmh": round(series[max(0, i - 1)].speed_kmh, 1),
+            "min_kmh": round(series[i].speed_kmh, 1),
+            "drop_kmh": round(series[max(0, i - 1)].speed_kmh - series[i].speed_kmh, 1),
+            "height_m": round(series[i].pos[1], 2),
             # Two seconds later. The number that separates a clip that cost a
             # moment from one that ended the run.
-            "after_kmh": round(rows[min(len(rows) - 1, i + 20)][16], 1),
+            "after_kmh": round(series[min(len(series) - 1, i + 20)].speed_kmh, 1),
             "hit": None,
         })
     return out
@@ -917,7 +923,7 @@ def stall_id(k, i):
     return "stall-%d-%d" % (k + 1, i)
 
 
-def build_recordings(rows, hits, crashes, report, names, scene, note,
+def build_recordings(series, hits, crashes, report, names, scene, note,
                      props_for, prop_size, dt, radius, stall_pad,
                      crash_pad=CRASH_PAD):
     """A payload per crash and per stall, all sharing one pool of geometry.
@@ -932,9 +938,10 @@ def build_recordings(rows, hits, crashes, report, names, scene, note,
     items = {}
 
     def add(rec_id, title, i0, i1, focus):
-        data = incident_view.build(rows, i0, i1, focus=focus, radius=radius,
-                        props=props_for(incident_view.window_points(rows, i0, i1)),
-                        prop_size=prop_size, scene=scene, hits=hits, note=note)
+        data = incident_view.build(
+            series, i0, i1, focus=focus, radius=radius,
+            props=props_for(incident_view.window_points(series, i0, i1)),
+            prop_size=prop_size, scene=scene, hits=hits, note=note)
         found = data["props"]
         data["title"] = title
         data["colliders"] = [colliders.add(c) for c in data["colliders"]]
@@ -948,10 +955,10 @@ def build_recordings(rows, hits, crashes, report, names, scene, note,
         found = add(crash_id(c),
                     "%s - impact at %.1f s, %.0f to %.0f km/h"
                     % (c["segment"], c["t"], c["entry_kmh"], c["min_kmh"]),
-                    max(0, i - half), min(len(rows), i + half + 1), i)
+                    max(0, i - half), min(len(series), i + half + 1), i)
         # What it hit, when the track data says anything at all. Solid props
         # only: a checkpoint volume and a pit trigger are flown through.
-        near = [(math.dist(p["p"], rows[i][1:4]), p) for p in found if p["k"] == "prop"]
+        near = [(math.dist(p["p"], series[i].pos), p) for p in found if p["k"] == "prop"]
         if near:
             d, p = min(near, key=lambda pair: pair[0])
             if d <= NEAR_HIT_M:
@@ -963,7 +970,7 @@ def build_recordings(rows, hits, crashes, report, names, scene, note,
             s0, s1 = st["index"]
             add(stall_id(k, i),
                 "%s, stall %d at %.1f s - %s" % (names[k], i, st["t"], st["verdict"]),
-                max(0, s0 - pad), min(len(rows), s1 + pad + 1), (s0 + s1) // 2)
+                max(0, s0 - pad), min(len(series), s1 + pad + 1), (s0 + s1) // 2)
 
     return {"geo": colliders.items, "props": props.items, "items": items}
 

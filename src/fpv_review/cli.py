@@ -18,7 +18,6 @@ there is one of them instead of nine.
 """
 
 import argparse
-import csv
 import json
 import sys
 import webbrowser
@@ -27,7 +26,6 @@ from pathlib import Path
 
 from fpv_review.common import analysis
 from fpv_review.common import incident_view
-from fpv_review.common import kinematics
 from fpv_review.common import pbs
 from fpv_review.common import report
 from fpv_review.common import schema
@@ -36,6 +34,7 @@ from fpv_review.sources.liftoff import calibration
 from fpv_review.sources.liftoff import map_geometry_generator
 from fpv_review.sources.liftoff import pbs as liftoff_pbs
 from fpv_review.sources.liftoff import replay
+from fpv_review.sources.liftoff import source
 from fpv_review.sources.liftoff import scene
 from fpv_review.sources.liftoff import tracks
 
@@ -44,6 +43,7 @@ PROG = 'python "%s"' % SRC_DIR
 
 DEFAULT_SIM = "liftoff"
 SIMS = {"liftoff": {"calibration": calibration,
+                    "source": source,
                     "map": map_geometry_generator,
                     "pbs": liftoff_pbs,
                     "replay": replay}}
@@ -74,15 +74,15 @@ def add_view(sub):
 
 def cmd_view(args, sim):
     cal = sim["calibration"]
-    meta, rows = sim["replay"].parse(args.replay)
-    rows = kinematics.add_velocity(rows)
-    hits = incident_view.impacts(rows, cal.IMPACT_DROP_KMH, cal.IMPACT_DEBOUNCE_SAMPLES)
-    t0 = rows[0][0]
-    at = args.at if args.at is not None else (rows[hits[0]][0] - t0 if hits else 0.0)
+    _session, series, _laps, _meta = sim["source"].load_flight(args.replay)
+    hits = incident_view.impacts(series, cal.IMPACT_DROP_KMH, cal.IMPACT_DEBOUNCE_SAMPLES)
+    t0 = series[0].t
+    at = args.at if args.at is not None else (series[hits[0]].t - t0 if hits else 0.0)
 
-    span = incident_view.window_indices(rows, at, args.pad)
+    span = incident_view.window_indices(series, at, args.pad)
     if not span:
-        sys.exit("no samples in that window; the flight is %.1f s long" % (rows[-1][0] - t0))
+        sys.exit("no samples in that window; the flight is %.1f s long"
+                 % (series[-1].t - t0))
     i0, i1 = span
 
     track, race, _tid, _rid = tracks.for_replay(args.track_dir, args.replay)
@@ -95,12 +95,12 @@ def cmd_view(args, sim):
     if props_path.exists():
         shapes = json.loads(props_path.read_text(encoding="utf-8"))["items"]
 
-    points = incident_view.window_points(rows, i0, i1)
+    points = incident_view.window_points(series, i0, i1)
     props = sim["map"].props_near(args.track_dir, track, race["route"] if race else [],
                                   points, args.radius, shapes)
 
-    focus = min(hits, key=lambda i: abs(rows[i][0] - t0 - at)) if hits else None
-    data = incident_view.build(rows, i0, i1, focus=focus, radius=args.radius,
+    focus = min(hits, key=lambda i: abs(series[i].t - t0 - at)) if hits else None
+    data = incident_view.build(series, i0, i1, focus=focus, radius=args.radius,
                                props=props, prop_size=cal.PROP_NOMINAL,
                                scene=loaded, hits=hits,
                                show_gates=not args.hide_route,
@@ -117,7 +117,7 @@ def cmd_view(args, sim):
         print("  note: scene has no %s geometry; props are placeholder boxes"
               % ", ".join(loaded["skipped"]))
     print("  impacts in the whole flight at t = %s"
-          % ", ".join("%.1f s" % (rows[i][0] - t0) for i in hits))
+          % ", ".join("%.1f s" % (series[i].t - t0) for i in hits))
 
 
 # --------------------------------------------------------------------- analyse
@@ -138,7 +138,7 @@ def add_analyse(sub, sim):
 
 
 def cmd_analyse(args, sim):
-    data = analysis.load(args.csv, args.speed_floor)
+    data = analysis.load(schema.read_csv(args.csv), args.speed_floor)
     dt = analysis.sample_dt(data)
     if args.laps:
         ranges = analysis.parse_laps(args.laps, len(data))
@@ -291,36 +291,34 @@ def cmd_report(args, sim):
         path, _ = sim["replay"].archive(found[0], args.archive_dir)
         print("replay: %s" % path)
 
-    meta, rows = sim["replay"].parse(path)
-    rows = kinematics.add_velocity(rows)
+    _session, series, laps, meta = sim["source"].load_flight(path)
     meta["_source"] = str(path)
 
     outdir = Path(args.out) / (args.name or Path(path).stem)
     toolkit.refuse_inside_toolkit(args.out, "reports")
     outdir.mkdir(parents=True, exist_ok=True)
     csv_path = outdir / "flight.csv"
-    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        w.writerow(schema.COLUMNS)
-        for r in rows:
-            w.writerow([round(x, 6) for x in r])
+    # A side output now, not the pipe between stages: the analysis is handed the
+    # series directly. It stays a deliverable - report.md links it and
+    # analysis.json names it - and it stays at six decimals.
+    schema.write_csv(csv_path, series)
 
     aargs = analysis.default_args(str(csv_path), cal)
-    data = report.load_samples(str(csv_path), aargs)
+    data = report.load_samples(series, aargs)
     dt = analysis.sample_dt(data)
 
     # lap boundaries come from the replay itself; --laps only overrides them
     if args.laps:
         ranges = analysis.parse_laps(args.laps, len(data))
-    elif meta["lap_start_indices"] and meta["lap_times"]:
-        starts = meta["lap_start_indices"]
+    elif laps.start_indices and laps.times:
+        starts = laps.start_indices
         ranges = [(max(0, a), min(len(data), starts[i + 1] if i + 1 < len(starts)
-                                  else a + int(round(meta["lap_times"][i] / dt))))
+                                  else a + int(round(laps.times[i] / dt))))
                   for i, a in enumerate(starts)]
     else:
         ranges = [(0, len(data))]
     names = (["lap %d" % (i + 1) for i in range(len(ranges))]
-             if len(ranges) > 1 or meta["lap_times"] else ["flight"])
+             if len(ranges) > 1 or laps.times else ["flight"])
 
     # A run that ends in a crash records a completed lap and then keeps
     # recording, and lapTimes only describes the laps that FINISHED. Left alone,
@@ -389,9 +387,9 @@ def cmd_report(args, sim):
     # A stall used to get a flat SVG clip printed under the table; the recording
     # answers the same question in the place the reader asks it, and answers the
     # one the clip could not - what was actually around the quad.
-    hits = incident_view.impacts(rows, cal.IMPACT_DROP_KMH,
+    hits = incident_view.impacts(series, cal.IMPACT_DROP_KMH,
                                  cal.IMPACT_DEBOUNCE_SAMPLES)
-    crashes = report.find_crashes(rows, hits, ranges, names)
+    crashes = report.find_crashes(series, hits, ranges, names)
     recs = {"geo": [], "props": [], "items": {}}
     if not args.no_rec and (crashes or any(e["stalls"] for e in analysed)):
         scenes = args.scenes or str(Path(args.track_dir) / "scenes")
@@ -399,7 +397,7 @@ def cmd_report(args, sim):
         geo_track, geo_race, geo_scene, geo_shapes, geo_note = (
             sim["map"].geometry_for(path, args.track_dir, scenes, props))
         recs = report.build_recordings(
-            rows, hits, crashes, analysed, names, geo_scene, geo_note,
+            series, hits, crashes, analysed, names, geo_scene, geo_note,
             props_for_window(geo_track, geo_race, geo_shapes), cal.PROP_NOMINAL,
             dt, args.rec_radius, args.stall_pad)
         if geo_note:

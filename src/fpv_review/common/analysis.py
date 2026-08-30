@@ -65,7 +65,6 @@ Usage
 """
 
 import argparse
-import csv
 import json
 import math
 import sys
@@ -89,25 +88,47 @@ def pct(vals, q):
     return v[min(len(v) - 1, int(len(v) * q / 100))]
 
 
-def load(path, speed_floor_kmh):
-    rows = list(csv.DictReader(open(path)))
-    if not rows:
-        sys.exit("empty csv: %s" % path)
-    f = lambda r, k: float(r[k]) if r.get(k) not in (None, "") else 0.0
-    has_vel = "vel_x" in rows[0]
+def load(series, speed_floor_kmh):
+    """The per-sample working values the rest of this module reads.
+
+    Takes a common.schema.FlightSeries. It used to take a path and parse
+    flight.csv itself; the CSV is now a side output rather than the pipe between
+    stages, so the series arrives directly and is never serialised in between.
+    """
+    if not len(series):
+        sys.exit("no samples to analyse")
     out = []
-    for i, r in enumerate(rows):
-        q = (f(r, "quat_x"), f(r, "quat_y"), f(r, "quat_z"), f(r, "quat_w"))
+    for i, s in enumerate(series):
+        # PRECISION PARITY - TEMPORARY, AND ITS PLACEMENT IS LOAD-BEARING.
+        #
+        # Until this commit the analysis read flight.csv, which is written with
+        # round(x, 6), while the incident view and the crash table read the same
+        # flight at full double precision from memory. Feeding the analysis the
+        # full-precision series would shift its numbers in the 7th significant
+        # digit across most of analysis.json, at exactly the moment the migration
+        # has to prove it changed nothing.
+        #
+        # So quantise here, reproducing the CSV round-trip exactly: csv.writer
+        # emits repr() of the rounded float and float() of that string returns
+        # the identical double.
+        #
+        # DO NOT "tidy" this into common/schema.py or source.load_flight(). The
+        # view and the crash table see full precision today, and quantising
+        # upstream would change THEIR numbers instead - the same regression in
+        # the opposite direction, and harder to spot.
+        #
+        # This exists for the migration only. It is removed in its own commit,
+        # whose entire diff is the deletion of these lines, so that the numeric
+        # change is attributable to one line and to nothing in the restructure.
+        q = tuple(round(v, 6) for v in s.attitude)
+        vel = tuple(round(v, 6) for v in s.velocity)
+        t = round(s.t, 6)
+        px, py, pz = (round(v, 6) for v in s.pos)
+        thr, yaw = round(s.throttle, 6), round(s.yaw, 6)
+        pit, rol = round(s.pitch, 6), round(s.roll, 6)
+
         fwd = rotate(q, (0, 0, 1))
         up = rotate(q, (0, 1, 0))
-        if has_vel:
-            vel = (f(r, "vel_x"), f(r, "vel_y"), f(r, "vel_z"))
-        else:
-            a, b = rows[max(0, i - 1)], rows[min(len(rows) - 1, i + 1)]
-            dt = f(b, "t") - f(a, "t")
-            vel = (((f(b, "pos_x") - f(a, "pos_x")) / dt,
-                    (f(b, "pos_y") - f(a, "pos_y")) / dt,
-                    (f(b, "pos_z") - f(a, "pos_z")) / dt) if dt > 0 else (0, 0, 0))
         vh = math.hypot(vel[0], vel[2])
         spd = math.sqrt(sum(c * c for c in vel)) * 3.6
         heading = math.atan2(vel[0], vel[2]) if vh > 0.5 else None
@@ -116,12 +137,12 @@ def load(path, speed_floor_kmh):
             d = math.degrees(math.atan2(fwd[0], fwd[2]) - heading)
             slip = (d + 180) % 360 - 180
         out.append({
-            "i": i, "t": f(r, "t"), "alt": f(r, "pos_y"),
-            "x": f(r, "pos_x"), "z": f(r, "pos_z"),
+            "i": i, "t": t, "alt": py,
+            "x": px, "z": pz,
             "spd": spd, "vh": vh, "vy": vel[1], "heading": heading, "slip": slip,
             "tilt": math.degrees(math.acos(max(-1.0, min(1.0, up[1])))),
-            "thr": f(r, "in_throttle"), "yaw": f(r, "in_yaw"),
-            "pitch": f(r, "in_pitch"), "roll": f(r, "in_roll"),
+            "thr": thr, "yaw": yaw,
+            "pitch": pit, "roll": rol,
         })
     for i, s in enumerate(out):
         a, b = out[max(0, i - 1)], out[min(len(out) - 1, i + 1)]

@@ -53,7 +53,7 @@ import sys
 from fpv_review.common import geometry
 
 
-def impacts(rows, drop_kmh, debounce):
+def impacts(series, drop_kmh, debounce):
     """Sample indices where speed collapses - an impact, not braking.
 
     Braking bleeds a few km/h per sample; hitting something takes 20+ out in one.
@@ -64,8 +64,8 @@ def impacts(rows, drop_kmh, debounce):
     both are tied to the sample rate, and a sim recording at 100 Hz spreads the
     same collision over ten samples."""
     found, last = [], -99
-    for i in range(1, len(rows)):
-        drop = rows[i - 1][16] - rows[i][16]
+    for i in range(1, len(series)):
+        drop = series[i - 1].speed_kmh - series[i].speed_kmh
         if drop >= drop_kmh and i - last > debounce:
             found.append(i)
             last = i
@@ -420,27 +420,27 @@ fpvViewer(document.getElementById('wrap'), __DATA__);
 """
 
 
-def window_indices(rows, at, pad):
+def window_indices(series, at, pad):
     """The sample indices within `pad` seconds of `at` -> (i0, i1), or None."""
-    t0 = rows[0][0]
-    idx = [i for i, r in enumerate(rows) if at - pad <= r[0] - t0 <= at + pad]
+    t0 = series[0].t
+    idx = [i for i, s in enumerate(series) if at - pad <= s.t - t0 <= at + pad]
     return (idx[0], idx[-1] + 1) if idx else None
 
 
-def window_points(rows, i0, i1):
+def window_points(series, i0, i1):
     """The (t, position) samples of one incident window, clocked from flight start.
 
     Exposed rather than kept inside build(), because the caller has to ask the
     sim's map geometry generator what is near the SAME points. Deriving them a
     second way at the call site is how the geometry and the path drift apart."""
-    window = rows[i0:i1]
+    window = series[i0:i1]
     if not window:
         raise ValueError("empty incident window")
-    t0 = rows[0][0]
-    return [(r[0] - t0, (r[1], r[2], r[3])) for r in window]
+    t0 = series[0].t
+    return [(s.t - t0, s.pos) for s in window]
 
 
-def build(rows, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
+def build(series, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
           scene=None, hits=None, show_gates=True, show_triggers=False, note=""):
     """Everything one recording needs, as a plain dict the viewer reads.
 
@@ -456,29 +456,30 @@ def build(rows, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
     common/ depend on sources/."""
     if prop_size is None:
         raise TypeError("build() needs prop_size from the sim's calibration")
-    points = window_points(rows, i0, i1)
-    window = rows[i0:i1]
-    t0 = rows[0][0]
+    points = window_points(series, i0, i1)
+    window = series[i0:i1]
+    t0 = series[0].t
     kept = geometry.cull(scene, points, radius) if scene else []
 
     focus = i0 + (i1 - i0) // 2 if focus is None else min(max(focus, i0), i1 - 1)
-    centre = list(rows[focus][1:4])
-    speeds = [r[16] for r in rows]
+    centre = list(series[focus].pos)
+    speeds = [s.speed_kmh for s in series]
     data = {
         "colliders": kept,
         "props": props or [],
         "propSize": list(prop_size),
-        "path": [{"t": round(r[0] - t0, 2),
-                  "p": [round(r[1], 3), round(r[2], 3), round(r[3], 3)],
-                  "q": [round(r[4], 4), round(r[5], 4), round(r[6], 4), round(r[7], 4)],
-                  "v": round(r[16], 1)} for r in window],
+        "path": [{"t": round(s.t - t0, 2),
+                  "p": [round(s.pos[0], 3), round(s.pos[1], 3), round(s.pos[2], 3)],
+                  "q": [round(s.attitude[0], 4), round(s.attitude[1], 4),
+                        round(s.attitude[2], 4), round(s.attitude[3], 4)],
+                  "v": round(s.speed_kmh, 1)} for s in window],
         "impacts": [i - i0 for i in (hits or []) if i0 <= i < i1],
         "target": [round(v, 2) for v in centre],
         # Fit the camera to the PATH, not to the cull radius. At racing speed a
         # three-second window is ninety metres long, so a camera placed at the
         # radius sits inside the flight and half of it swings off screen.
         "dist0": round(min(140.0, max(15.0, 1.7 * max(
-            math.dist(centre, (r[1], r[2], r[3])) for r in window))), 1),
+            math.dist(centre, s.pos) for s in window))), 1),
         "vref": max(30.0, sorted(speeds)[int(len(speeds) * 0.9)]),
         "startFrame": 0,
         "showGates": bool(show_gates),

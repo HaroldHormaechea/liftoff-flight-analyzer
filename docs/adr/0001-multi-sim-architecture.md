@@ -172,6 +172,28 @@ a library survives — what changed is that there is one `main()` instead of nin
 
 **`pyproject.toml` is load-bearing**, per decision 6.
 
+**Under a link install, the printed commands name the resolved path rather than
+the one the user typed.** `toolkit.invocation()` builds on `TOOLKIT_ROOT`, which
+comes from `realpath`, and every message telling a user what to run next is built
+from it — as is argparse's own usage line, which shares the same `PROG`. So a
+toolkit reached through a symlink or a junction prints the real clone directory,
+not the link.
+
+Accepted rather than fixed. The command it prints **works**; it is consistent
+with `refuse_inside_toolkit()`, which already names the real root in its refusal
+for the same reason; and it is not a regression, because before the restructure
+these messages printed a bare filename with no path at all, which ran from
+nowhere.
+
+The cost, stated plainly: the documented install is a clone, where the link path
+and the real path coincide and none of this is visible. It surfaces only for
+someone who has mounted the toolkit through a link — who is precisely the reader
+least likely to recognise the directory they are handed — and a command pasted
+out of such a message goes stale if the link is later re-pointed. Resolving it
+would mean threading the invoked path through from `sys.argv[0]`, which is more
+machinery than the problem currently justifies. Revisit if link installs become
+the common case rather than the exception.
+
 **The UnityFS reader was NOT hoisted to a shared engine layer.**
 `sources/liftoff/unityfs.py` holds a general UnityFS/LZ4 bundle reader that
 would serve any Unity-based sim, and `scene.py` reaches into it by private name

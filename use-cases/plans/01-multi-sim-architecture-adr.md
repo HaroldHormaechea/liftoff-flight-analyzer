@@ -352,6 +352,40 @@ It was then **broken on purpose**. Seven defects were seeded into a copy of the 
 - **Colour counts reproduce exactly** for identical code and identical geometry. The earlier caveat ("the signal is 1 or a large collapse, not a small drift") therefore applies **only to the E-vs-F pass**, where geometry may legitimately shift. For **A–E, any change in a colour count is investigable.** That is a materially sharper check than first specified.
 - **`--allow-capabilities` excuses the new top-level key for A–E only.** It must **not** be passed for the E-vs-F pass: both sides have the key by then, so any difference there is real.
 
+### 15d. Pre-declared output differences, and the standalone page
+
+**Three differences beyond `capabilities` are declared IN ADVANCE.** Found during B6 by inventorying strings that name old script filenames. Two of them are *runtime output*, not comments, and they instruct a user to run files that will not exist after the migration — so they must be fixed, and fixing them changes committed output. Declaring them before the comparison is the whole discipline; explaining them afterwards is what an undeclared regression looks like.
+
+| # | change | where it shows, verified against the frozen baseline |
+|---|---|---|
+| 1 | the `capabilities` key | `analysis.json`, all four |
+| 2 | footer attribution — `generated … by \`fpv_report.py\`` | **all four `report.md`** |
+| 3 | uncached-scene note — `scene is not cached (liftoff_scene.py)` | **the Woodpecker's `report.html`** only |
+| 4 | uncached-props note — `prop shapes are not cached (liftoff_props.py)` | if any replay triggers it |
+
+**Hard constraint on the new footer text: a fixed string, never a path.** If it embeds the clone location or anything machine-dependent, every generated report becomes irreproducible across machines and the baseline comparison breaks for a reason unrelated to this migration.
+
+Other stale names are comments and docstrings (17 files), plus `cli.py`'s `--history` help text — all E obligations, none affecting output.
+
+### The standalone incident page — a fourth artifact, and it refuses where the report degrades
+
+`scripts/README.md:262` prints `python liftoff_view.py --replay replays/<crash>.xml -o crash.html`, so criterion 14 puts this artifact in scope. It **had no baseline** until now, and the viewer probe would have passed it **vacuously** — it shares `VIEWER_JS`, so the JavaScript bug does reach it, but the page around it has no `[data-rec]` triggers and no `#recmodal`; `page()` emits a `#wrap` div and calls `fpvViewer` at load. The probe looked for `[data-rec]`, found zero, and reported PASS. **Third instance of the same hole shape** (after the zero-recording report and the un-calibrated harness). The probe now auto-detects the standalone shape and inspects that canvas directly; do not pass an expected count for these pages.
+
+**Frozen at `baseline-standalone\`** with checksums. These pages carry **no timestamp and regenerate byte-identically**, so they compare with a plain `cmp` — stricter than the report tree, nothing to excuse:
+
+| replay | result | canvas | colours |
+|---|---|---|---|
+| LiftoffArena | exit 0 | 764×429 | 5667 |
+| Rustline canary | exit 0 | 764×429 | 2884 |
+| Rustline pinned | exit 0 | 764×429 | 3265 |
+| TheRussianWoodpecker | **exit 1, no page written** | — | — |
+
+**The refusal contract, which must survive the migration.** On an uncached scene the standalone path **refuses** — exit 1, no file, `no cached scene for TheRussianWoodpecker. Build it: python liftoff_scene.py --environment TheRussianWoodpecker` — where `fpv_report.py` **degrades** to a path-only recording with a footer note. Same missing input, two deliberately different responses, and they sit either side of a seam this migration moves: `main()` leaves `incident_view.py` entirely under §3, so the refusal lives in relocated code. After the migration it must still be exit 1 with that guidance. Every plausible regression here is silent — a page that builds empty, or a bare traceback instead of the instruction — and **none would be caught by the report-tree comparison**, because that replay's *report* degrades rather than refusing. (Note the message itself names `liftoff_scene.py`, so its text is a pre-declared change too.)
+
+Also existing behaviour to reproduce rather than "fix": the pinned crash replay has no impacts, so its standalone page renders the `t=0.0` window rather than an incident, and still builds at exit 0.
+
+Both check layers were proven on this shape as well: the same faithful mutation gives 6 layer-1 hits, and layer 2 gives both a `ReferenceError` **and a canvas of exactly one colour** — the background-fills-first prediction landing exactly, which is the strongest confirmation that the colour heuristic measures what it claims to.
+
 **Measured noise floor.** The same command run twice against unchanged code, into two different `-o` directories, differs **only** in `analysis.json`'s `generated` (second granularity) and the `report.md` / `report.html` footer timestamp (minute granularity). **Every SVG asset and `flight.csv` were byte-identical.** Anything else that differs is a regression.
 
 **Two corrections to §15's expectations:**

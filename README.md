@@ -1,4 +1,4 @@
-![Left: a Liftoff race through a gate. Right: the same flight in the report - the stall's row in the table, and its recording open and scrubbing.](banner.png)
+![Left: the report - the stall's row in the table and its recording open, the quad stopped by the ramp. Right: the same moment in Liftoff, 58 km/h into that ramp.](banner.png)
 
 # liftoff-flight-analyzer
 

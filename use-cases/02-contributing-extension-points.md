@@ -110,6 +110,36 @@ the approved vocabulary is published only in the licensed specification.
     `report.html`, `flight.csv` and SVG assets, apart from timestamps. These are
     corrections to wiring and documentation, not to behaviour.
 
+18a. **The comparison must exercise the changed code, and the report artifacts do
+    not.** *(Added 2026-08-30 — the challenger found this hole in 18 as first
+    written.)* The two calls criterion 14 fixes, `tracks.for_replay` and
+    `scene.load_scene`, exist **only in `cmd_view`**. `cmd_report` never calls
+    either; it reaches geometry through `sim["map"].geometry_for`. So a before/after
+    diff of `analysis.json`, `report.md`, `report.html`, `flight.csv` and the SVGs
+    executes **zero lines** of the code criterion 14 changes — the only real
+    behavioural change in the run would ship verified by nothing but a reading.
+
+    **Therefore the `view` subcommand must be compared too**: run `view` before and
+    after against the same archived replay and compare the pages with `cmp`.
+    `incident_view.page()` embeds **no timestamp** — the only two timestamp sites in
+    the tree are `report.py:1271` and `cli.py:446` — so these pages compare
+    byte-for-byte with **nothing to excuse**, which makes this the strictest check
+    available in the run. This is the same standalone artifact UC-01 discovered its
+    probe had been passing over vacuously; it is the third time this artifact has
+    turned out to be the one that matters.
+
+    Run material is prepared at `C:\dev\liftoff-uc02-run\`: `trackdata/` (187
+    entries with `index.json`, `props.json` and `scenes/`), `data/liftoff_history.json`,
+    and `replays/` holding the same four archived replays UC-01 used —
+    `20260829-205847_LiftoffArena_Race_3lap.xml`,
+    `20260830-122843_Rustline_Race_nolap.xml`,
+    `20260830-125608_Rustline_Race_nolap.xml`,
+    `20260830-183818_TheRussianWoodpecker_Race_1lap.xml`. Geometry is exercised
+    rather than degraded. **Run every comparison with `cwd` set to that directory**,
+    never from the worktree, and pass archived paths explicitly — never `--latest`,
+    which re-archives and re-picks. `use-cases/plans/01-multi-sim-architecture-adr.md`
+    § 15a records the traps, each of which produced a confidently wrong result once.
+
 19. **The guide states the Liftoff requirement up front.** A contributor needs a
     Liftoff install and their own saved replay to verify any change, because
     `flight.csv` is gitignored, no fixture is committed, and the example report
@@ -147,9 +177,11 @@ the approved vocabulary is published only in the licensed specification.
   baseline apparatus was deleted after UC-01 merged, so this run must re-establish
   a before/after comparison from `main` rather than assume one exists.
 - **Edge case (added)** — Criterion 14's defect is unreachable by any test that
-  runs today, because only one sim exists. It can be verified by reading and by
-  confirming the call now routes through `sim[...]`, not by observing different
-  behaviour.
+  runs today, because only one sim exists: with one entry in `SIMS`, routing through
+  `sim[...]` and reaching for the module directly select the same object. It is
+  verified by reading, by confirming the call routes through `sim[...]`, and — per
+  18a — by confirming the `view` output is unchanged, which proves the correction
+  broke nothing even though it cannot prove the bug is gone.
 - **Assumption** — The two verification rules this project produced ("a check must
   distinguish 'I looked and found nothing' from 'there was nothing to look at'",
   and "a check nobody has watched fail proves nothing") are deliberately **not**

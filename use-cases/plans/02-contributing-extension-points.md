@@ -150,6 +150,106 @@ rather than re-argued.
    refuse — ADR-0001 decision 6's two-marker search working exactly as designed, in
    a case nobody constructed for it.
 
+## Second attempt, 2026-08-30 evening: five more rounds, nine Majors, all resolved
+
+The loop was restarted with the eight findings above as inputs. It ran five more
+rounds and closed nine Majors, then **died one message short of approval** when the
+account hit its monthly spend limit. The full proposal text was exchanged between
+the two agents but **never reached the lead**, so there is still no `PLAN_FILE` to
+implement from — what follows is the complete set of decisions, which is enough to
+reconstruct one.
+
+### Settled by ruling (the lead)
+
+1. **The six `calibration.py` names go into ADR-0001 decision 7**, and the
+   decision-4 amendment is extended to cover the function surfaces of the contract
+   modules (`props_near`, `geometry_for`, `declare()`), which the ADR documents
+   nowhere. **Standing rule, now applied three times: where the guide cannot cite
+   because the ADR is silent, the ADR gets the missing content and the guide cites
+   it.** Criterion 2 makes restatement illegal, so an ADR gap leaves one legal move.
+2. **The epilog names `report --latest`**, not only whole commands — `report`
+   survives a partial contract *except* for that flag, so the flag is where the
+   remaining gap lives.
+3. **Registration validates before anything executes or is written**, refusing with
+   a named reason that gives **both** the missing item **and the module that
+   supplies it**. Half of that ("`capabilities` is missing") tells a contributor
+   *what*; the whole of it ("…from `sources/<sim>/capabilities.py`") tells them
+   *what to do*.
+4. **The validation boundary is enumerated-versus-introspected, not
+   keys-versus-attributes.** Validate the registration keys plus the six named
+   module-level constants in `calibration.py`. Six names written down is a list, not
+   a mechanism, and cannot drift into walking a namespace. **Importing contract
+   modules to discover their function surface stays forbidden** — those live in the
+   ADR and are enforced by first use, because that check would cost more than it
+   protects.
+5. **Do not quote an error string the project does not own.** The tool's own
+   messages are quotable — we control them, and this run fixes four. CPython's are a
+   claim about someone else's release, and quoting a 3.14 message against a
+   `requires-python = ">=3.9"` floor is a **version-varying claim, the same defect
+   family as the machine-varying paths removed from the guide, on a different
+   axis** — unnoticeable here because nobody has a 3.9 to check against.
+
+### Measured this round
+
+| finding | measurement |
+|---|---|
+| The `THRESHOLDS` residual closes in three lines | `try/except KeyError` around the `analysis.build_parser(sim["calibration"])` call in `add_analyse`. **Duplicates nothing**: the twenty keys stay encoded only in `build_parser` (20 direct `T["…"]` lookups at `analysis.py:402`, reached at registration via `cli.py:146`; `default_args` routes through the same function at `analysis.py:486`). Satisfies the one-declaration rule rather than straining it. |
+| The `KeyError` lands after a **complete** `flight.csv` | `outdir.mkdir` at `cli.py:315`, `schema.write_csv` at `:320`, `declare()` at `:322`. Not partial debris — a finished-looking artifact from a failed run, which is worse. |
+| The nested-repo failure has **two** shapes | no `src/` → `can't open file '…\src': [Errno 2] No such file or directory`, exit 2. `src/` without `__main__.py` → `can't find '__main__' module in '…\src'`, exit 1. |
+| …and a third reason not to quote either | CPython prefixes both with the **interpreter's full path**, which would have smuggled a machine-varying path back into the guide through the one door criterion 10 was not watching. |
+| `epilog=""` is a non-issue | Byte-identical to omitting the keyword: **1568 bytes both ways** on the real `cli.build_parser()`, 162 both ways on an isolated parser. `HelpFormatter.format_help`'s closing `strip('\n')` erases it. Recorded so the next person who notices it does not re-litigate. |
+| The naive import grep is wrong | `grep -rn "fpv_review.sources" common/` returns **2 hits on clean `main`** — a prose line in `__init__.py` plus a `__pycache__` binary match. The scoped form returns nothing. |
+
+### Two design corrections worth keeping
+
+- **`~/fpv-work`, never `cd "$FPV/.." && mkdir fpv-work`.** With the README's
+  documented install path the latter resolves to `~/.claude/skills/fpv-work` —
+  inside the folder Claude Code scans for skills. That is ADR-0001 decision 5's own
+  reasoning reappearing one directory up, **inside the guide written to teach that
+  rule**, in a spot `refuse_inside_toolkit()` does not cover because an ordinary
+  clone is exactly what that guard is designed not to block.
+- **The `$FPV` capture prints with its verification as one unit.** The recipe was
+  accepted partly because it fails loudly from the wrong directory — but that
+  loudness is an accident of this machine (`C:\dev` is not a repo). A contributor
+  whose work directory sits inside any repository of their own gets **that**
+  repository's path back, exit 0, no warning. The failure is then **misdirected
+  rather than silent**: Python names a path inside the contributor's own project,
+  which reads as a broken clone rather than a mis-set variable. The check built and
+  tested for this is the existence of `$FPV/src/fpv_review/cli.py` — a file only
+  this repository has — verified across all three outcomes in both shells (clone
+  `OK`/`True`; empty `FAILED`/`False`; other repo `FAILED`/`False`).
+
+### The one gap when the run died
+
+**Criterion 20's fix was dropped from the Proposed Solution during consolidation.**
+The final draft ran §A guide, §B criterion 14, §C criterion 16, §D ADR, §E
+docstrings, §F `sources/__init__.py` — **with no section for criterion 20.** Files
+Affected listed `cli.py — 14, 16, 20` and the verification section tested it, but a
+developer implementing §A–§F would have built five of six changes. The Analysis
+diagnosed the trap and said the guard belongs in `cmd_view`, which is diagnosis,
+not instruction.
+
+**Three constraints also fell out in the same consolidation**, and one of them
+protects a verification step inside the plan itself:
+
+1. **Do not repair `tracks.load_index`** — the `SystemExit` trap, measured.
+2. **Do not touch `cmd_report`** — it degrades correctly today.
+3. **Do not tidy `scene.load_scene`'s wording** while implementing criterion 20.
+   The verification asserts the Woodpecker refusal **verbatim**, so a developer who
+   rewords it fails a check in this plan without ever touching the code that check
+   exists to cover.
+
+A resumed run restores those four items; everything else was approved.
+
+### A process finding worth carrying into implementation
+
+**Twice in this run, an inferred result was recorded as a measurement**, and both
+times it was caught only because someone re-ran it: the `epilog=""` claim, and an
+error string reported for a case the scratch repository could not have produced (it
+had no `src/`, so that message could not have been printed). Neither survived, but
+neither was caught by review of the reasoning — only by execution. **The temptation
+is strongest exactly where a check "obviously" would have printed something.**
+
 ## What is NOT established
 
 - **No approved proposal exists.** v5 was with the challenger, which had two

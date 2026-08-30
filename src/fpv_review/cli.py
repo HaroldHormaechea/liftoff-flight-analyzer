@@ -34,6 +34,7 @@ from fpv_review.common import schema
 from fpv_review.common import toolkit
 from fpv_review.sources.liftoff import calibration
 from fpv_review.sources.liftoff import map_geometry_generator
+from fpv_review.sources.liftoff import pbs as liftoff_pbs
 from fpv_review.sources.liftoff import replay
 from fpv_review.sources.liftoff import scene
 from fpv_review.sources.liftoff import tracks
@@ -44,6 +45,7 @@ PROG = 'python "%s"' % SRC_DIR
 DEFAULT_SIM = "liftoff"
 SIMS = {"liftoff": {"calibration": calibration,
                     "map": map_geometry_generator,
+                    "pbs": liftoff_pbs,
                     "replay": replay}}
 
 
@@ -491,6 +493,67 @@ def cmd_report(args, sim):
         if not opened:
             print("  (could not open a browser; open the file above by hand)")
 
+# ---------------------------------------------------------------------- pbs
+
+def add_pbs(sub, sim):
+    ap = sub.add_parser("pbs", prog="%s pbs" % PROG,
+                        description=sim["pbs"].__doc__,
+                        formatter_class=argparse.RawDescriptionHelpFormatter,
+                        help="show personal bests and snapshot them")
+    ap.add_argument("--root", default=str(sim["pbs"].DEFAULT_ROOT), help="Liftoff LocalLow folder")
+    ap.add_argument("--history", default="data/liftoff_history.json",
+                    help="PB snapshot history (default data/liftoff_history.json, "
+                         "relative to the working directory - never the script's "
+                         "own folder, which may be shared or public)")
+    ap.add_argument("--save", action="store_true", help="append this snapshot to the history")
+    ap.add_argument("--json", action="store_true", help="dump the snapshot as JSON instead")
+    ap.set_defaults(run=cmd_pbs)
+
+
+def cmd_pbs(args, sim):
+
+    root = Path(args.root)
+    if not root.exists():
+        sys.exit(f"Liftoff data folder not found: {root}")
+
+    snap = sim["pbs"].snapshot(root)
+    if args.json:
+        print(json.dumps(snap, indent=2))
+        return
+
+    hist_path = Path(args.history)
+    history = pbs.load_history(hist_path)
+    prev = history[-1] if history else None
+    names = sim["pbs"].track_names(root)
+
+    guids = sorted(set(snap["races"]) | set(snap["laps"]),
+                   key=lambda g: names.get(g, g))
+    if not guids:
+        print("No personal bests recorded yet.")
+    for g in guids:
+        print(f"\n{names.get(g, g)}")
+        r, l = snap["races"].get(g), snap["laps"].get(g)
+        if r and r["best"]:
+            pr = (prev or {}).get("races", {}).get(g, {}).get("best") if prev else None
+            print(f"  best race   {pbs.fmt(min(r['best']))}{pbs.diff_line(min(r['best']), min(pr) if pr else None)}")
+        if l and l["best"]:
+            pl = (prev or {}).get("laps", {}).get(g, {}).get("best") if prev else None
+            print(f"  best lap    {pbs.fmt(min(l['best']))}{pbs.diff_line(min(l['best']), min(pl) if pl else None)}")
+            print(f"  top laps    {', '.join(pbs.fmt(t) for t in sorted(l['best']))}")
+            if l["average"]:
+                print(f"  average lap {pbs.fmt(l['average'])}")
+
+    if prev:
+        print(f"\ncompared against snapshot from {prev['taken_at']}")
+    else:
+        print("\nno earlier snapshot to compare against")
+
+    if args.save:
+        total = pbs.append_snapshot(hist_path, history, snap)
+        print(f"snapshot appended to {hist_path} ({total} total)")
+    else:
+        print("run again with --save to record this snapshot")
+
 # ------------------------------------------------------------------ dispatch
 
 def pick_sim(argv):
@@ -517,6 +580,7 @@ def build_parser(sim_name=DEFAULT_SIM):
     add_view(sub)
     add_analyse(sub, sim)
     add_report(sub, sim)
+    add_pbs(sub, sim)
     return ap
 
 

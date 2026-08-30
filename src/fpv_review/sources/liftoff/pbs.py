@@ -27,21 +27,14 @@ Usage
 
 from __future__ import annotations
 
-import argparse
-import json
 import os
 import re
-import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", "")).parent / "LocalLow" / "LuGus Studios" / "Liftoff"
 
-
-def fmt(seconds: float) -> str:
-    m, s = divmod(float(seconds), 60)
-    return f"{int(m)}:{s:06.3f}"
 
 
 def track_names(root: Path) -> dict:
@@ -101,73 +94,3 @@ def snapshot(root: Path) -> dict:
         "races": parse_times(root / "RaceTimes" / "raceTimes.xml", "raceTime"),
         "laps": parse_times(root / "LapTimes" / "lapTimes.xml", "lapTime"),
     }
-
-
-def diff_line(cur: float | None, prev: float | None) -> str:
-    if cur is None or prev is None:
-        return "  (new)" if prev is None and cur is not None else ""
-    d = cur - prev
-    if abs(d) < 1e-6:
-        return ""
-    return f"  ({d:+.3f}s)"
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", default=str(DEFAULT_ROOT), help="Liftoff LocalLow folder")
-    ap.add_argument("--history", default="data/liftoff_history.json",
-                    help="PB snapshot history (default data/liftoff_history.json, "
-                         "relative to the working directory - never the script's "
-                         "own folder, which may be shared or public)")
-    ap.add_argument("--save", action="store_true", help="append this snapshot to the history")
-    ap.add_argument("--json", action="store_true", help="dump the snapshot as JSON instead")
-    args = ap.parse_args()
-
-    root = Path(args.root)
-    if not root.exists():
-        sys.exit(f"Liftoff data folder not found: {root}")
-
-    snap = snapshot(root)
-    if args.json:
-        print(json.dumps(snap, indent=2))
-        return
-
-    hist_path = Path(args.history)
-    history = json.loads(hist_path.read_text()) if hist_path.exists() else []
-    prev = history[-1] if history else None
-    names = track_names(root)
-
-    guids = sorted(set(snap["races"]) | set(snap["laps"]),
-                   key=lambda g: names.get(g, g))
-    if not guids:
-        print("No personal bests recorded yet.")
-    for g in guids:
-        print(f"\n{names.get(g, g)}")
-        r, l = snap["races"].get(g), snap["laps"].get(g)
-        if r and r["best"]:
-            pr = (prev or {}).get("races", {}).get(g, {}).get("best") if prev else None
-            print(f"  best race   {fmt(min(r['best']))}{diff_line(min(r['best']), min(pr) if pr else None)}")
-        if l and l["best"]:
-            pl = (prev or {}).get("laps", {}).get(g, {}).get("best") if prev else None
-            print(f"  best lap    {fmt(min(l['best']))}{diff_line(min(l['best']), min(pl) if pl else None)}")
-            print(f"  top laps    {', '.join(fmt(t) for t in sorted(l['best']))}")
-            if l["average"]:
-                print(f"  average lap {fmt(l['average'])}")
-
-    if prev:
-        print(f"\ncompared against snapshot from {prev['taken_at']}")
-    else:
-        print("\nno earlier snapshot to compare against")
-
-    if args.save:
-        hist_path.parent.mkdir(parents=True, exist_ok=True)
-        history.append(snap)
-        hist_path.write_text(json.dumps(history, indent=2))
-        print(f"snapshot appended to {hist_path} ({len(history)} total)")
-    else:
-        print("run again with --save to record this snapshot")
-
-
-if __name__ == "__main__":
-    main()

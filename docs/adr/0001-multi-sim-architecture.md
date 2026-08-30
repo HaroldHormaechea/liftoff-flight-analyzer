@@ -4,6 +4,14 @@
 
 Accepted — 2026-08-30.
 
+Amended — 2026-08-31, by use case 02, in four places: decision 4 twice (the
+registration tolerance, and the function surface each contract module exposes),
+decision 7 once (the six calibration module-level names), and Consequences once,
+where § "Degradation stays explicit" became § "Degradation is declared and
+published; the consuming half is provided and not yet called". No decision is
+reversed. Each amendment records what the code does — which is what that use
+case changed the code to make true.
+
 ## Context
 
 The toolkit began as nine Python modules in a flat `scripts/` folder, every one

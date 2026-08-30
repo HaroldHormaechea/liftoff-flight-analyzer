@@ -1,4 +1,4 @@
-![Liftoff FPV racing](banner.jpg)
+![Left: a Liftoff race through a gate. Right: the same flight in the report - the stall's row in the table, and its recording open and scrubbing.](banner.png)
 
 # liftoff-flight-analyzer
 

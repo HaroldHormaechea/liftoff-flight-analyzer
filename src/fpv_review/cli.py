@@ -41,8 +41,10 @@ from fpv_review.sources.liftoff import source
 from fpv_review.sources.liftoff import telemetry
 from fpv_review.sources.liftoff import tracks
 
-SRC_DIR = Path(__file__).resolve().parent.parent
-PROG = 'python "%s"' % SRC_DIR
+# One implementation of the front-door command line, in common/toolkit.py, so a
+# message telling the user what to run cannot drift from what argparse prints
+# in its own usage line.
+PROG = toolkit.invocation()
 
 DEFAULT_SIM = "liftoff"
 SIMS = {"liftoff": {"calibration": calibration,
@@ -106,12 +108,13 @@ def cmd_view(args, sim):
         shapes = json.loads(props_path.read_text(encoding="utf-8"))["items"]
 
     points = incident_view.window_points(series, i0, i1)
-    props = sim["map"].props_near(args.track_dir, track, race["route"] if race else [],
-                                  points, args.radius, shapes)
+    near_props = sim["map"].props_near(args.track_dir, track,
+                                       race["route"] if race else [],
+                                       points, args.radius, shapes)
 
     focus = min(hits, key=lambda i: abs(series[i].t - t0 - at)) if hits else None
     data = incident_view.build(series, i0, i1, focus=focus, radius=args.radius,
-                               props=props, prop_size=cal.PROP_NOMINAL,
+                               props=near_props, prop_size=cal.PROP_NOMINAL,
                                scene=loaded, hits=hits,
                                show_gates=not args.hide_route,
                                show_triggers=args.show_triggers)
@@ -407,9 +410,9 @@ def cmd_report(args, sim):
     recs = {"geo": [], "props": [], "items": {}}
     if not args.no_rec and (crashes or any(e["stalls"] for e in analysed)):
         scenes = args.scenes or str(Path(args.track_dir) / "scenes")
-        props = args.props or str(Path(args.track_dir) / "props.json")
+        prop_table = args.props or str(Path(args.track_dir) / "props.json")
         geo_track, geo_race, geo_scene, geo_shapes, geo_note = (
-            sim["map"].geometry_for(path, args.track_dir, scenes, props))
+            sim["map"].geometry_for(path, args.track_dir, scenes, prop_table))
         recs = report.build_recordings(
             series, hits, crashes, analysed, names, geo_scene, geo_note,
             props_for_window(geo_track, geo_race, geo_shapes), cal.PROP_NOMINAL,

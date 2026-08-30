@@ -83,7 +83,7 @@ from pathlib import Path
 
 from fpv_review.sources.liftoff import unityfs
 
-from fpv_review.common import toolkit    # refuse_inside_toolkit, and nothing else
+from fpv_review.common import toolkit    # refuse_inside_toolkit and command()
 
 FORMAT = 1                            # bump when index.json's shape changes
 STEAM_APPID = "410340"
@@ -444,8 +444,9 @@ def cmd_for_replay(args, index_dir):
         return
     print("  %d checkpoints, %d laps" % (race["checkpoints"], race["laps"]))
     print("  route %s" % " -> ".join(str(i) for i in race["route"]))
-    print("  geometry: python %s --gates %r -o %s"
-          % (Path(__file__).name, track["name"], index_dir))
+    print("  geometry: %s"
+          % toolkit.command("tracks", "--gates", repr(track["name"]),
+                            "-o", index_dir))
 
 
 def cmd_gates(args, index_dir):
@@ -546,14 +547,15 @@ def run(args):
         else:
             print("track data %s: %s" % ("READY" if ok else "NOT READY", why))
             if not ok:
-                print("rebuild with: python %s -o %s" % (Path(__file__).name, args.out))
+                print("rebuild with: %s"
+                      % toolkit.command("tracks", "-o", args.out))
         sys.exit(0 if ok else 1)
 
     if args.for_replay or args.gates or args.list:
         ok, why = check(args.out, game)
         if not ok:
-            sys.exit("track data not ready: %s\nrun: python %s -o %s"
-                     % (why, Path(__file__).name, args.out))
+            sys.exit("track data not ready: %s\nrun: %s"
+                     % (why, toolkit.command("tracks", "-o", args.out)))
         if args.for_replay:
             return cmd_for_replay(args, args.out)
         if args.gates:

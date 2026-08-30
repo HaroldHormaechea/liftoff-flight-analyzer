@@ -63,6 +63,27 @@ def toolkit_root():
 TOOLKIT_ROOT = toolkit_root()
 
 
+def invocation():
+    """The command line that runs this toolkit: `python "<clone>/src"`.
+
+    One implementation, because there is one front door. cli.py uses it for
+    argparse's `prog`, and command() below builds on it for the messages that
+    tell a stuck user what to run next."""
+    return 'python "%s"' % (TOOLKIT_ROOT / "src")
+
+
+def command(*args):
+    """A runnable invocation, ready to paste: `python "<clone>/src" tracks -o x`.
+
+    Use this for any message that tells the user to run something. Building such
+    a message from `Path(__file__).name` looks right and is not: the modules are
+    no longer runnable by path, so a filename produces an instruction that runs
+    from nowhere - not from the user's working directory, and not from the
+    module's own folder either, because the src layout makes it non-importable
+    that way by design."""
+    return " ".join([invocation()] + [str(a) for a in args])
+
+
 def refuse_inside_toolkit(target, what):
     """Hard stop before writing personal data into shared code.
 

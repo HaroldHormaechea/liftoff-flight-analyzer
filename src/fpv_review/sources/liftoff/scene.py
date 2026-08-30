@@ -460,8 +460,9 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
 def load_scene(out_dir, environment):
     path = Path(out_dir) / ("%s.json" % environment)
     if not path.exists():
-        sys.exit("no cached scene for %s.\nBuild it: python %s --environment %s"
-                 % (environment, Path(__file__).name, environment))
+        sys.exit("no cached scene for %s.\nBuild it: %s"
+                 % (environment,
+                    toolkit.command("scene", "--environment", environment)))
     return json.loads(path.read_text(encoding="utf-8"))
 
 

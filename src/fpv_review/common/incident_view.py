@@ -45,75 +45,34 @@ That signature caught both impacts in the reference crash, 0.7 s apart, where
 the flag caught neither.
 """
 
-import argparse
 import json
 import math
 import os
 import sys
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import liftoff_replay as LR
 import liftoff_scene as LS
 import liftoff_tracks as LT
 
-IMPACT_DROP_KMH = 20.0          # speed lost inside one 0.1 s sample
-PROP_NOMINAL = (0.6, 1.0, 0.6)  # half-extents for a prop whose shape is unknown
 
-
-def impacts(rows):
+def impacts(rows, drop_kmh, debounce):
     """Sample indices where speed collapses - an impact, not braking.
 
     Braking bleeds a few km/h per sample; hitting something takes 20+ out in one.
     Reported once per event, not once per sample, so a two-sample collapse is one
-    impact."""
+    impact.
+
+    `drop_kmh` and `debounce` come from the sim's calibration, not from here:
+    both are tied to the sample rate, and a sim recording at 100 Hz spreads the
+    same collision over ten samples."""
     found, last = [], -99
     for i in range(1, len(rows)):
         drop = rows[i - 1][16] - rows[i][16]
-        if drop >= IMPACT_DROP_KMH and i - last > 3:
+        if drop >= drop_kmh and i - last > debounce:
             found.append(i)
             last = i
     return found
-
-
-def props_near(track_dir, track_meta, route, points, radius, shapes=None):
-    """Track items within `radius` of the path, classified by what they ARE.
-
-    Three different things live in a track's blueprint list and drawing them
-    alike is actively misleading - it was the first thing the pilot questioned
-    about this view. Around one crash on Mexican Wave: 79 solid props, 31
-    pass-through trigger volumes, and 3 route checkpoints.
-
-      gate     a checkpoint the race routes through - the path, not an obstacle
-      trigger  a pit volume (charge battery, repair props) or a spawn point.
-               NOT SOLID. You fly through these; drawing them as obstacles
-               invents collisions that cannot happen.
-      prop     everything else: barriers, ramps, lights, boards. Solid.
-
-    Position and yaw are exact. Shape is not known yet - see the module note."""
-    root = LT.parse_xml(Path(track_dir) / track_meta["file"])
-    on_route = set(route or ())
-    out = []
-    for item in LT.blueprints(root).values():
-        if item["type"] in ("Action", "Spawnpoint"):
-            kind = "trigger"
-        elif item["id"] in on_route:
-            kind = "gate"
-        else:
-            kind = "prop"
-        for _t, q in points:
-            if math.dist(item["pos"], q) <= radius:
-                shape = (shapes or {}).get(item["item"], {}).get("colliders", [])
-                out.append({"p": [round(v, 3) for v in item["pos"]],
-                            "yaw": round(item["yaw"], 2),
-                            "n": item["item"] or "?",
-                            "k": kind,
-                            "ap": item["aperture"],
-                            # solid parts only: a trigger volume is not an obstacle
-                            "sh": [c for c in shape if not c.get("trig")]})
-                break
-    return out
-
 
 
 # ---------------------------------------------------------------------------
@@ -471,34 +430,47 @@ def window_indices(rows, at, pad):
     return (idx[0], idx[-1] + 1) if idx else None
 
 
-def build(rows, i0, i1, focus=None, radius=25.0, track_dir=None, track=None,
-          race=None, scene=None, shapes=None, hits=None,
-          show_gates=True, show_triggers=False, note=""):
+def window_points(rows, i0, i1):
+    """The (t, position) samples of one incident window, clocked from flight start.
+
+    Exposed rather than kept inside build(), because the caller has to ask the
+    sim's map geometry generator what is near the SAME points. Deriving them a
+    second way at the call site is how the geometry and the path drift apart."""
+    window = rows[i0:i1]
+    if not window:
+        raise ValueError("empty incident window")
+    t0 = rows[0][0]
+    return [(r[0] - t0, (r[1], r[2], r[3])) for r in window]
+
+
+def build(rows, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
+          scene=None, hits=None, show_gates=True, show_triggers=False, note=""):
     """Everything one recording needs, as a plain dict the viewer reads.
 
     Every geometry source is optional, and a missing one simply does not draw.
     That is the difference between a view that works on the two environments
     whose scene bundles happen to be cached and one that works on every flight:
     the path, the attitude and the impacts come from the replay alone, and they
-    are most of the answer. `note` is what the page says about the rest."""
+    are most of the answer. `note` is what the page says about the rest.
+
+    `props` arrives as data from the sim's map geometry generator, and
+    `prop_size` from its calibration. Neither is looked up here: this module
+    draws, and reaching into a sim to find out what to draw is what would make
+    common/ depend on sources/."""
+    if prop_size is None:
+        raise TypeError("build() needs prop_size from the sim's calibration")
+    points = window_points(rows, i0, i1)
     window = rows[i0:i1]
-    if not window:
-        raise ValueError("empty incident window")
     t0 = rows[0][0]
-    points = [(r[0] - t0, (r[1], r[2], r[3])) for r in window]
     kept = LS.cull(scene, points, radius) if scene else []
-    props = []
-    if track and track_dir:
-        props = props_near(track_dir, track, race["route"] if race else [],
-                           points, radius, shapes)
 
     focus = i0 + (i1 - i0) // 2 if focus is None else min(max(focus, i0), i1 - 1)
     centre = list(rows[focus][1:4])
     speeds = [r[16] for r in rows]
     data = {
         "colliders": kept,
-        "props": props,
-        "propSize": list(PROP_NOMINAL),
+        "props": props or [],
+        "propSize": list(prop_size),
         "path": [{"t": round(r[0] - t0, 2),
                   "p": [round(r[1], 3), round(r[2], 3), round(r[3], 3)],
                   "q": [round(r[4], 4), round(r[5], 4), round(r[6], 4), round(r[7], 4)],
@@ -527,65 +499,3 @@ def page(data, title, heading):
                 .replace("__HEADING__", heading)
                 .replace("__VIEWER_JS__", VIEWER_JS)
                 .replace("__DATA__", json.dumps(data, separators=(",", ":"))))
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--replay", required=True, help="archived replay xml")
-    ap.add_argument("--at", type=float, help="incident time; default is the first impact")
-    ap.add_argument("--pad", type=float, default=3.0, help="seconds either side (default 3)")
-    ap.add_argument("--radius", type=float, default=25.0, help="metres of geometry (default 25)")
-    ap.add_argument("--track-dir", default="trackdata")
-    ap.add_argument("--scenes", default=None, help="default: <track-dir>/scenes")
-    ap.add_argument("--props", help="prop shape table (default: <track-dir>/props.json)")
-    ap.add_argument("--hide-route", action="store_true",
-                    help="start with the route checkpoints hidden")
-    ap.add_argument("--show-triggers", action="store_true",
-                    help="draw pit trigger volumes from the start "
-                         "(off by default; they are not solid)")
-    ap.add_argument("-o", "--out", default="incident3d.html")
-    args = ap.parse_args()
-
-    meta, rows = LR.parse(args.replay)
-    rows = LR.add_velocity(rows)
-    hits = impacts(rows)
-    t0 = rows[0][0]
-    at = args.at if args.at is not None else (rows[hits[0]][0] - t0 if hits else 0.0)
-
-    span = window_indices(rows, at, args.pad)
-    if not span:
-        sys.exit("no samples in that window; the flight is %.1f s long" % (rows[-1][0] - t0))
-    i0, i1 = span
-
-    track, race, _tid, _rid = LT.for_replay(args.track_dir, args.replay)
-    if track is None:
-        sys.exit("this replay has no track, so there is no environment to draw")
-    scenes = Path(args.scenes) if args.scenes else Path(args.track_dir) / "scenes"
-    scene = LS.load_scene(scenes, track["environment"])
-    shapes = {}
-    props_path = Path(args.props) if args.props else Path(args.track_dir) / "props.json"
-    if props_path.exists():
-        shapes = json.loads(props_path.read_text(encoding="utf-8"))["items"]
-
-    focus = min(hits, key=lambda i: abs(rows[i][0] - t0 - at)) if hits else None
-    data = build(rows, i0, i1, focus=focus, radius=args.radius, track_dir=args.track_dir,
-                 track=track, race=race, scene=scene, shapes=shapes, hits=hits,
-                 show_gates=not args.hide_route, show_triggers=args.show_triggers)
-
-    heading = "%s &mdash; %s, impact at t=%.1f s" % (track["environment"], track["name"], at)
-    Path(args.out).write_text(
-        page(data, "%s crash %.1fs" % (track["environment"], at), heading),
-        encoding="utf-8")
-    print("%s  (%d colliders, %d props, %d samples, %d impacts)"
-          % (args.out, len(data["colliders"]), len(data["props"]),
-             len(data["path"]), len(data["impacts"])))
-    if scene.get("skipped"):
-        print("  note: scene has no %s geometry; props are placeholder boxes"
-              % ", ".join(scene["skipped"]))
-    print("  impacts in the whole flight at t = %s"
-          % ", ".join("%.1f s" % (rows[i][0] - t0) for i in hits))
-
-
-if __name__ == "__main__":
-    main()

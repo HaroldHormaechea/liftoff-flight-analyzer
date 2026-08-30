@@ -97,11 +97,11 @@ def cmd_view(args, sim):
                  % (series[-1].t - t0))
     i0, i1 = span
 
-    track, race, _tid, _rid = tracks.for_replay(args.track_dir, args.replay)
+    track, race, _tid, _rid = sim["tracks"].for_replay(args.track_dir, args.replay)
     if track is None:
         sys.exit("this replay has no track, so there is no environment to draw")
     scenes = Path(args.scenes) if args.scenes else Path(args.track_dir) / "scenes"
-    loaded = scene.load_scene(scenes, track["environment"])
+    loaded = sim["scene"].load_scene(scenes, track["environment"])
     shapes = {}
     props_path = Path(args.props) if args.props else Path(args.track_dir) / "props.json"
     if props_path.exists():

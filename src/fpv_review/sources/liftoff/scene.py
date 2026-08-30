@@ -83,6 +83,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from fpv_review.common import geometry
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import liftoff_replay as LR
 import liftoff_tracks as LT
@@ -189,28 +191,6 @@ def gate_cloud(track_dir, environment):
 
 # ------------------------------------------------------------ transform maths
 
-def qmul(a, b):
-    ax, ay, az, aw = a
-    bx, by, bz, bw = b
-    return (aw * bx + ax * bw + ay * bz - az * by,
-            aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw,
-            aw * bw - ax * bx - ay * by - az * bz)
-
-
-def qrot(q, v):
-    x, y, z, w = q
-    cx = y * v[2] - z * v[1]
-    cy = z * v[0] - x * v[2]
-    cz = x * v[1] - y * v[0]
-    dx = y * cz - z * cy
-    dy = z * cx - x * cz
-    dz = x * cy - y * cx
-    return (v[0] + 2 * w * cx + 2 * dx,
-            v[1] + 2 * w * cy + 2 * dy,
-            v[2] + 2 * w * cz + 2 * dz)
-
-
 def compose(transforms, tid, cache, depth=0):
     """World (position, rotation, scale) for a Transform, up the parent chain."""
     if tid in cache:
@@ -224,9 +204,9 @@ def compose(transforms, tid, cache, depth=0):
     else:
         pp, pq, ps = compose(transforms, parent, cache, depth + 1)
         scaled = (node["p"][0] * ps[0], node["p"][1] * ps[1], node["p"][2] * ps[2])
-        turned = qrot(pq, scaled)
+        turned = geometry.qrot(pq, scaled)
         result = ((pp[0] + turned[0], pp[1] + turned[1], pp[2] + turned[2]),
-                  qmul(pq, node["q"]),
+                  geometry.qmul(pq, node["q"]),
                   (node["s"][0] * ps[0], node["s"][1] * ps[1], node["s"][2] * ps[2]))
     cache[tid] = result
     return result
@@ -303,7 +283,7 @@ def read_scene(path, verbose=True):
         if tid is None:
             continue
         pos, rot, scale = compose(transforms, tid, cache)
-        offset = qrot(rot, (centre[0] * scale[0], centre[1] * scale[1], centre[2] * scale[2]))
+        offset = geometry.qrot(rot, (centre[0] * scale[0], centre[1] * scale[1], centre[2] * scale[2]))
         world = [round(pos[i] + offset[i], 3) for i in range(3)]
         if kind == "box":
             half = [round(abs(size[i] * scale[i]) / 2.0, 3) for i in range(3)]
@@ -335,12 +315,6 @@ def read_scene(path, verbose=True):
     return out, counts
 
 
-def bounds_of(points):
-    lo = [min(p[i] for p in points) for i in range(3)]
-    hi = [max(p[i] for p in points) for i in range(3)]
-    return lo, hi
-
-
 MIN_COLLIDERS = 500
 NEAR_GATE_M = 25.0
 NEED_FRACTION = 0.7
@@ -368,51 +342,6 @@ def cloud_score(colliders, cloud):
 
 
 MAX_PATH_INSIDE = 0.005
-
-
-def contains_point(c, p):
-    """Is a world point inside this collider? Exact for all three primitives."""
-    d = (p[0] - c["p"][0], p[1] - c["p"][1], p[2] - c["p"][2])
-    if c["t"] == "sph":
-        return d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= c["r"] * c["r"]
-    x, y, z, w = c["q"]
-    local = qrot((-x, -y, -z, w), d)                 # world -> collider frame
-    if c["t"] == "box":
-        s = c["s"]
-        return abs(local[0]) <= s[0] and abs(local[1]) <= s[1] and abs(local[2]) <= s[2]
-    axis = c["a"]
-    half = max(c["h"] / 2.0 - c["r"], 0.0)
-    clamped = max(-half, min(half, local[axis]))
-    off = list(local)
-    off[axis] = local[axis] - clamped
-    return off[0] * off[0] + off[1] * off[1] + off[2] * off[2] <= c["r"] * c["r"]
-
-
-def path_inside(colliders, path):
-    """Fraction of flown samples that fall inside solid geometry.
-
-    A flight is a WITNESS to the environment's free space. The quad was there,
-    so in the right scene essentially no sample is inside a collider; in the
-    wrong scene the path drives through walls. This is the only test found that
-    reliably rejects a wrong environment - every scene is authored around the
-    world origin at similar scale, so gate positions alone match almost any of
-    them, including, when tried, the wrong answer for an environment whose
-    bundle was already known."""
-    if not path:
-        return 0.0
-    quick = [(c, c["p"], (max(c["s"]) if c["t"] == "box"
-                          else c["r"] if c["t"] == "sph"
-                          else c["r"] + c["h"] / 2.0) ** 2 * 3.05) for c in colliders]
-    hit = 0
-    for q in path:
-        for c, centre, reach2 in quick:
-            dx = q[0] - centre[0]
-            dy = q[1] - centre[1]
-            dz = q[2] - centre[2]
-            if dx * dx + dy * dy + dz * dz <= reach2 and contains_point(c, q):
-                hit += 1
-                break
-    return hit / float(len(path))
 
 
 def flight_path(replay, stride=15):
@@ -474,7 +403,7 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
             continue
         if len(colliders) < MIN_COLLIDERS and not bundle:
             continue
-        occupied = path_inside(colliders, path) if path else 0.0
+        occupied = geometry.path_inside(colliders, path) if path else 0.0
         near = cloud_score(colliders, cloud) if not bundle else 1.0
         verdict = "flown through" if occupied > MAX_PATH_INSIDE else "%3.0f%% gates" % (100 * near)
         print("  %-16s %6d colliders  path-inside %5.2f%%  %s  (%.1f s)"
@@ -490,7 +419,7 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
                  "know which one it is." % environment)
 
     near, occupied, candidate, colliders, counts = best
-    lo, hi = bounds_of([c["p"] for c in colliders])
+    lo, hi = geometry.bounds_of([c["p"] for c in colliders])
     scene = {
         "format": FORMAT,
         "environment": environment,
@@ -547,29 +476,6 @@ def path_window(flight_csv, at, pad):
     return points
 
 
-def cull(scene, points, radius):
-    """Colliders within `radius` of any sampled point on the path.
-
-    Distance is measured to the collider's centre with its own size added, so a
-    long wall counts as near when any part of it is near, not only its middle."""
-    if not points:
-        return []
-    keep = []
-    for c in scene["colliders"]:
-        reach = radius
-        if c["t"] == "box":
-            reach += math.dist((0, 0, 0), c["s"])
-        elif c["t"] == "sph":
-            reach += c["r"]
-        else:
-            reach += c["r"] + c["h"] / 2.0
-        for _t, q in points:
-            if math.dist(q, c["p"]) <= reach:
-                keep.append(c)
-                break
-    return keep
-
-
 # ----------------------------------------------------------------------- main
 
 def main():
@@ -624,7 +530,7 @@ def main():
             parser.error("--cull needs --flight and --at")
         scene = load_scene(out_dir, args.environment)
         points = path_window(args.flight, args.at, args.pad)
-        keep = cull(scene, points, args.radius)
+        keep = geometry.cull(scene, points, args.radius)
         payload = {
             "environment": args.environment,
             "at": args.at, "pad": args.pad, "radius": args.radius,

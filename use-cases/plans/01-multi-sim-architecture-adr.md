@@ -440,7 +440,11 @@ A project with no test suite lives or dies on whether its checks are honest. Two
 
 **Rule 2 (corollary) — a check that has never been seen to FAIL proves nothing.** QA's first mutant renamed the JavaScript function *declarations* as well as the call sites; `node --check` caught that, and that version would have "proved" a probe that does not actually work. Only the faithful mutant — call sites alone, which is what a blind sweep really produces — demonstrated the gap. **Before trusting a green result, mutate something and watch the check go red.**
 
-The two are siblings: one is about a check with no input, the other about a check with no proof. Both produce the same false confidence, and in a project that has chosen to have no test suite, false confidence in a check is the most expensive thing available.
+**Rule 1 applies to guards, not only to checks — and there the vacuous pass inverts.** A check that cannot fail is one that never looks; a **guard** that cannot fail is one that fires on *everything*, which looks like working code and breaks the product. So a guard needs both halves asked: *does it fire when it must?* and *does it stay quiet when it must?*
+
+This is not theoretical. Every criterion-12 case the plan specified tested the first half — that `refuse_inside_toolkit()` blocks a write into a link-mounted toolkit. QA added a third case nobody asked for: **through a junction with output OUTSIDE the toolkit**, which is the actual install mode (cloned into `~/.claude/skills/fpv-review`, run from the user's own project). Had the guard over-fired there, the tool would have been broken for its primary installation, silently, for every user — and **no criterion in this plan would have caught it.** It passes: exit 0, output identical after timestamp normalisation. QA ran it against a *copy* of the tree so that a failed guard would write into its own directory rather than `TARGET_DIR`.
+
+The two rules are siblings: one is about a check with no input, the other about a check with no proof. Both produce the same false confidence, and in a project that has chosen to have no test suite, false confidence in a check is the most expensive thing available.
 
 ## 16. Risks carried into implementation
 

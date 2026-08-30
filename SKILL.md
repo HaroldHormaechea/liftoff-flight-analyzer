@@ -52,13 +52,21 @@ reports, replays or history under a linked toolkit root.
 **Run this first, every review, before reading a replay.** It is one command and
 it either prints READY or tells you what to do.
 
-```bash
-S=scripts
-python $S/liftoff_tracks.py --check -o trackdata   # exit 0 ready, 1 not
-python $S/liftoff_tracks.py         -o trackdata   # rebuild; a no-op if current
+```powershell
+# PowerShell. $FPV is the folder this skill was cloned into.
+$FPV = "$HOME\.claude\skills\fpv-review"
+python "$FPV\src" tracks --check -o trackdata   # exit 0 ready, 1 not
+python "$FPV\src" tracks         -o trackdata   # rebuild; a no-op if current
 ```
 
-`liftoff_tracks.py` finds the Liftoff install itself — every Steam library from
+```bash
+# bash
+FPV="$HOME/.claude/skills/fpv-review"
+python "$FPV/src" tracks --check -o trackdata    # exit 0 ready, 1 not
+python "$FPV/src" tracks         -o trackdata    # rebuild; a no-op if current
+```
+
+The `tracks` command finds the Liftoff install itself — every Steam library from
 the registry and `libraryfolders.vdf` — and extracts all 92 tracks and 92 races
 out of the game's Unity bundles as XML, plus an `index.json` that joins a
 replay's `trackID` to the track it was flown on. It takes about five seconds
@@ -81,8 +89,8 @@ where the right move is to continue on stale data.
 What it is for, once ready:
 
 ```bash
-python $S/liftoff_tracks.py --for-replay replays/<file>.xml -o trackdata
-python $S/liftoff_tracks.py --gates "03 - Stuff That Works" -o trackdata
+python "$FPV/src" tracks --for-replay replays/<file>.xml -o trackdata
+python "$FPV/src" tracks --gates "03 - Stuff That Works" -o trackdata
 ```
 
 `--for-replay` names the track and the race, because a replay records only a
@@ -106,18 +114,26 @@ what is around them.
 
 ## The deliverable is an illustrated report, not a terminal dump
 
-`fpv_report.py` writes a folder holding the report, its figures, an animated
+The `report` command writes a folder holding the report, its figures, an animated
 replay of every lap, and a playable 3D recording of every crash and every stall.
 That is what the pilot gets. The terminal
-output of `analyze_flight.py` is for answering a quick question mid-conversation,
+output of the `analyse` command is for answering a quick question mid-conversation,
 not for a review.
 
 ## Step 2 — build the report
 
+```powershell
+# PowerShell
+$FPV = "$HOME\.claude\skills\fpv-review"
+python "$FPV\src" report --latest                 # newest replay saved in-game
+python "$FPV\src" report replays\<file>.xml       # a specific archived one
+```
+
 ```bash
-S=scripts
-python $S/fpv_report.py --latest                  # newest replay saved in-game
-python $S/fpv_report.py replays/<file>.xml        # a specific archived one
+# bash
+FPV="$HOME/.claude/skills/fpv-review"
+python "$FPV/src" report --latest                  # newest replay saved in-game
+python "$FPV/src" report replays/<file>.xml        # a specific archived one
 ```
 
 `--latest` archives the replay before it reads anything, then writes
@@ -203,8 +219,8 @@ for context around a stall recording, `--no-rec` to skip the recordings entirely
   shows what was actually AROUND the quad, which is the difference between "the
   speed collapsed" and "it clipped the ramp on the inside of the turn". When the
   environment has not been cached the recording says so in its footer and draws
-  what it has; cache it with `liftoff_scene.py` and `liftoff_props.py` once per
-  environment (see `scripts/README.md`).
+  what it has; cache it with the `scene` and `props` commands once per
+  environment (see `docs/engineering.md`).
 
 What to read in the numbers:
 
@@ -292,12 +308,12 @@ tables into the conversation; they are in the file.
 
 ## Step 5 — the other sources, only when needed
 
-- **`liftoff_pbs.py --save`** — personal bests per track, diffed against the last
+- **`pbs --save`** — personal bests per track, diffed against the last
   snapshot. Liftoff overwrites these in place, so a beaten time is gone unless
   snapshotted. Run it every session. It also reveals flights that were never
   recorded, which is often where the real progress is, and it is what the
   report's "best ever" bar is drawn from.
-- **`liftoff_telemetry.py`** — live UDP feed, 100 Hz, and the only route to gyro,
+- **`telemetry`** — live UDP feed, 100 Hz, and the only route to gyro,
   battery and motor RPM. It must be running during the flight. Reach for it for
   tuning-level questions (oscillation, propwash, PID feel), not for piloting
   technique, which 10 Hz covers. Enabled via `TelemetryConfiguration.json` in the

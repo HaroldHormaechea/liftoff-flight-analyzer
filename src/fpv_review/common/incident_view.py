@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-liftoff_view.py - a 3D view of an incident: geometry, flight path, orbit, scrub.
+incident_view.py - a 3D view of an incident: geometry, flight path, orbit, scrub.
 
 This is a command and a library. Run it and it writes one standalone,
-self-contained page for one moment. Import it and `fpv_report.py` uses the same
+self-contained page for one moment. Import it and `report.py` uses the same
 `build()` and the same `VIEWER_JS` for the recording behind every crash and
 every stall in a report, so the renderer exists once and a fix to it lands in
 both.
 
-    python liftoff_view.py --replay replays/<file>.xml --at 6.0 -o crash.html
+    python "<clone>/src" view --replay replays/<file>.xml --at 6.0 -o crash.html
 
 What it draws:
 
   * the environment's collision geometry, culled to a radius around the path
-    (from `liftoff_scene.py`'s cache)
+    (from the `scene` command's cache)
   * the TRACK PROPS near the incident, drawn as placeholders - see below
   * the flown path, coloured by speed
   * the quad at its true attitude, with a nose arrow, on a time scrubber
@@ -440,7 +440,7 @@ def window_points(series, i0, i1):
     return [(s.t - t0, s.pos) for s in window]
 
 
-def build(series, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
+def build(series, i0, i1, focus=None, radius=None, props=None, prop_size=None,
           scene=None, hits=None, show_gates=True, show_triggers=False, note=""):
     """Everything one recording needs, as a plain dict the viewer reads.
 
@@ -456,6 +456,10 @@ def build(series, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
     common/ depend on sources/."""
     if prop_size is None:
         raise TypeError("build() needs prop_size from the sim's calibration")
+    if radius is None:
+        # Metres of track scale, and so calibration like any other. It used to
+        # carry a 25.0 default here - Liftoff's number, sitting in common/.
+        raise TypeError("build() needs radius from the sim's calibration")
     points = window_points(series, i0, i1)
     window = series[i0:i1]
     t0 = series[0].t

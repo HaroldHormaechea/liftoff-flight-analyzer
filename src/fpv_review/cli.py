@@ -31,11 +31,14 @@ from fpv_review.common import report
 from fpv_review.common import schema
 from fpv_review.common import toolkit
 from fpv_review.sources.liftoff import calibration
+from fpv_review.sources.liftoff import capabilities as liftoff_capabilities
 from fpv_review.sources.liftoff import map_geometry_generator
 from fpv_review.sources.liftoff import pbs as liftoff_pbs
+from fpv_review.sources.liftoff import props
 from fpv_review.sources.liftoff import replay
-from fpv_review.sources.liftoff import source
 from fpv_review.sources.liftoff import scene
+from fpv_review.sources.liftoff import source
+from fpv_review.sources.liftoff import telemetry
 from fpv_review.sources.liftoff import tracks
 
 SRC_DIR = Path(__file__).resolve().parent.parent
@@ -43,15 +46,21 @@ PROG = 'python "%s"' % SRC_DIR
 
 DEFAULT_SIM = "liftoff"
 SIMS = {"liftoff": {"calibration": calibration,
+                    "capabilities": liftoff_capabilities,
                     "source": source,
                     "map": map_geometry_generator,
                     "pbs": liftoff_pbs,
-                    "replay": replay}}
+                    "props": props,
+                    "replay": replay,
+                    "scene": scene,
+                    "telemetry": telemetry,
+                    "tracks": tracks}}
 
 
 # ------------------------------------------------------------------------ view
 
-def add_view(sub):
+def add_view(sub, sim):
+    cal = sim["calibration"]
     ap = sub.add_parser("view", prog="%s view" % PROG,
                         description=incident_view.__doc__,
                         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -59,7 +68,8 @@ def add_view(sub):
     ap.add_argument("--replay", required=True, help="archived replay xml")
     ap.add_argument("--at", type=float, help="incident time; default is the first impact")
     ap.add_argument("--pad", type=float, default=3.0, help="seconds either side (default 3)")
-    ap.add_argument("--radius", type=float, default=25.0, help="metres of geometry (default 25)")
+    ap.add_argument("--radius", type=float, default=cal.REC_RADIUS_M,
+                    help="metres of geometry (default %g)" % cal.REC_RADIUS_M)
     ap.add_argument("--track-dir", default="trackdata")
     ap.add_argument("--scenes", default=None, help="default: <track-dir>/scenes")
     ap.add_argument("--props", help="prop shape table (default: <track-dir>/props.json)")
@@ -211,6 +221,7 @@ def cmd_analyse(args, sim):
 # ------------------------------------------------------------------- report
 
 def add_report(sub, sim):
+    cal = sim["calibration"]
     ap = sub.add_parser("report", prog="%s report" % PROG,
                         description=report.__doc__,
                         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -227,9 +238,9 @@ def add_report(sub, sim):
     ap.add_argument("--name", help="report folder name (default: the replay's)")
     ap.add_argument("--laps", help='override lap ranges, "732:1879,1879:3056"')
     ap.add_argument("--history", default="data/liftoff_history.json",
-                    help="PB snapshot history, from liftoff_pbs.py --save (default "
-                         "data/liftoff_history.json, relative to the working "
-                         "directory)")
+                    help="PB snapshot history, written by the `pbs --save` "
+                         "command (default data/liftoff_history.json, relative "
+                         "to the working directory)")
     ap.add_argument("--reset-debrief", action="store_true",
                     help="discard the hand-written Debrief and put the stub back; "
                          "without it, an existing Debrief is carried forward")
@@ -244,8 +255,9 @@ def add_report(sub, sim):
                     help="longest animation loop, seconds; anything longer is sped up and "
                          "the factor is printed on the figure (default 40)")
     ap.add_argument("--anim-frames", type=int, default=380, help="frames per animation")
-    ap.add_argument("--cam-span", type=float, default=45.0,
-                    help="metres across the follow cam on a lap animation (default 45)")
+    ap.add_argument("--cam-span", type=float, default=cal.CAM_SPAN_M,
+                    help="metres across the follow cam on a lap animation "
+                         "(default %g)" % cal.CAM_SPAN_M)
     ap.add_argument("--tail-min", type=float, default=5.0,
                     help="seconds of actual FLYING (above the stall speed) that "
                          "untimed time either side of the laps must contain to "
@@ -257,8 +269,9 @@ def add_report(sub, sim):
                          "(default trackdata, relative to the working directory)")
     ap.add_argument("--scenes", help="scene cache folder (default: <track-dir>/scenes)")
     ap.add_argument("--props", help="prop shape table (default: <track-dir>/props.json)")
-    ap.add_argument("--rec-radius", type=float, default=25.0,
-                    help="metres of environment geometry around a recording (default 25)")
+    ap.add_argument("--rec-radius", type=float, default=cal.REC_RADIUS_M,
+                    help="metres of environment geometry around a recording "
+                         "(default %g)" % cal.REC_RADIUS_M)
     ap.add_argument("--no-rec", action="store_true",
                     help="skip the crash and stall recordings; the tables stay, the "
                          "play controls do not")
@@ -303,6 +316,7 @@ def cmd_report(args, sim):
     # analysis.json names it - and it stays at six decimals.
     schema.write_csv(csv_path, series)
 
+    caps = sim["capabilities"].declare()
     aargs = analysis.default_args(str(csv_path), cal)
     data = report.load_samples(series, aargs)
     dt = analysis.sample_dt(data)
@@ -455,6 +469,11 @@ def cmd_report(args, sim):
                        "ids": sorted(recs["items"]),
                        "titles": {i: d.get("title") for i, d in recs["items"].items()}},
         "personal_bests": pb,
+        # Criterion 9: what this sim can and cannot supply, declared rather
+        # than inferred. Additive and pre-declared - for Liftoff it changes
+        # nothing in report.md or report.html, because Liftoff declares no
+        # gap that suppresses a finding the report makes.
+        "capabilities": caps.as_json(),
         "figures": {k: (rel(v) if isinstance(v, Path)
                         else {str(i): rel(p) for i, p in v.items()})
                     for k, v in figs.items()},
@@ -552,6 +571,40 @@ def cmd_pbs(args, sim):
     else:
         print("run again with --save to record this snapshot")
 
+# ------------------------------------------------- the sim's own subcommands
+
+# These five keep their parser and their body in their own module and are
+# adopted here with argparse's `parents=`. Nothing is restated, so a flag cannot
+# drift between the module that reads it and the command that offers it - the
+# same reason `analyse` borrows the analysis parser. What they lose is
+# runnability by path: there is one front door now, not nine.
+SIM_COMMANDS = [
+    ("replay",    "replay",    "decode and archive one saved replay"),
+    ("tracks",    "tracks",    "extract track and race geometry from the game"),
+    ("scene",     "scene",     "build or cull an environment's collision geometry"),
+    ("props",     "props",     "collider shapes for the items a track is built from"),
+    ("telemetry", "telemetry", "record the live UDP telemetry feed"),
+]
+
+
+def add_sim_commands(sub, sim):
+    for name, key, blurb in SIM_COMMANDS:
+        module = sim[key]
+        ap = sub.add_parser(name, prog="%s %s" % (PROG, name), add_help=False,
+                            parents=[module.build_parser()],
+                            description=module.__doc__,
+                            formatter_class=argparse.RawDescriptionHelpFormatter,
+                            help=blurb)
+        ap.set_defaults(run=_sim_runner(key))
+
+
+def _sim_runner(key):
+    """A closure per command, so the loop variable is not captured by reference."""
+    def run(args, sim):
+        return sim[key].run(args)
+    return run
+
+
 # ------------------------------------------------------------------ dispatch
 
 def pick_sim(argv):
@@ -575,10 +628,11 @@ def build_parser(sim_name=DEFAULT_SIM):
     ap.add_argument("--sim", default=DEFAULT_SIM, choices=sorted(SIMS),
                     help="which sim's ingestion to use (default: %s)" % DEFAULT_SIM)
     sub = ap.add_subparsers(dest="command", metavar="<command>")
-    add_view(sub)
+    add_view(sub, sim)
     add_analyse(sub, sim)
     add_report(sub, sim)
     add_pbs(sub, sim)
+    add_sim_commands(sub, sim)
     return ap
 
 

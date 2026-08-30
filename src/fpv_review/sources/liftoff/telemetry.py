@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_telemetry.py - record Liftoff's live UDP telemetry stream to CSV.
+telemetry.py - record Liftoff's live UDP telemetry stream to CSV.
 
 Liftoff streams real flight data over UDP if you ask it to. This is the good
 source: true position, attitude, velocity, gyro and - the one that matters most
@@ -46,10 +46,10 @@ config does not match the one being parsed.
 
 Usage
 -----
-  python liftoff_telemetry.py                      # record until Ctrl+C
-  python liftoff_telemetry.py -o flight.csv
-  python liftoff_telemetry.py --timeout 120        # stop after 120 s of silence
-  python liftoff_telemetry.py --probe              # show packet size and layout
+  python "<clone>/src" telemetry                      # record until Ctrl+C
+  python "<clone>/src" telemetry -o flight.csv
+  python "<clone>/src" telemetry --timeout 120        # stop after 120 s of silence
+  python "<clone>/src" telemetry --probe              # show packet size and layout
 """
 
 import argparse
@@ -149,7 +149,12 @@ def plausible(values, fmt):
     return True
 
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--out", help="CSV to write (default: telemetry_<timestamp>.csv)")
@@ -161,7 +166,10 @@ def main():
     ap.add_argument("--timeout", type=float, default=0,
                     help="stop after this many seconds with no packets (0 = never)")
     ap.add_argument("--probe", action="store_true", help="report packet size and layout, then quit")
-    args = ap.parse_args()
+    return ap
+
+
+def run(args):
 
     if args.format:
         fmt = [s.strip() for s in args.format.split(",") if s.strip()]
@@ -243,7 +251,3 @@ def main():
 
     dur = time.time() - started
     print("wrote %s - %d frames over %.0fs (%.0f Hz)" % (out, n, dur, n / max(dur, 1e-6)))
-
-
-if __name__ == "__main__":
-    main()

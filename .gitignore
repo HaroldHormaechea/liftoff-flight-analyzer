@@ -8,3 +8,8 @@ data/
 trackdata/
 .venv/
 .DS_Store
+
+# a pyproject.toml exists now; these are what packaging tools leave behind
+build/
+dist/
+*.egg-info/

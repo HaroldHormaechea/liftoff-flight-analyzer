@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-analyze_flight.py - flight-geometry analysis of a decoded Liftoff flight.
+analysis.py - flight-geometry analysis of a decoded flight.
 
-Consumes the CSV written by liftoff_replay.py (10 Hz) or liftoff_telemetry.py
+Consumes a FlightSeries decoded by a sim's source.py (Liftoff: 10 Hz) or a CSV
+written by its telemetry capture
 (100 Hz). Both carry position, attitude quaternion and stick positions, which is
 everything this needs.
 
@@ -58,10 +59,10 @@ and every one is a CLI flag, so a default can be moved without touching code.
 
 Usage
 -----
-  python analyze_flight.py flight.csv
-  python analyze_flight.py flight.csv --laps "73:1077,1077:1768"   # sample indices
-  python analyze_flight.py flight.csv --laps "..." --trace         # stick traces
-  python analyze_flight.py flight.csv --json
+  python "<clone>/src" analyse flight.csv
+  python "<clone>/src" analyse flight.csv --laps "73:1077,1077:1768"  # sample indices
+  python "<clone>/src" analyse flight.csv --laps "..." --trace        # stick traces
+  python "<clone>/src" analyse flight.csv --json
 """
 
 import argparse
@@ -405,7 +406,7 @@ def segment_stats(seg, dt, stall_speed):
 def build_parser(calibration):
     """The CLI, exposed so other tools can borrow the thresholds.
 
-    fpv_report.py embeds this analysis rather than re-deriving it, so the
+    common/report.py embeds this analysis rather than re-deriving it, so the
     numbers in a written report and the numbers on the terminal come from one
     implementation and one set of defaults. Adding a threshold here reaches
     both.
@@ -516,7 +517,7 @@ def parse_laps(spec, n):
 
 
 def analyse(data, ranges, names, dt, args):
-    """The whole analysis, as data. main() prints it; fpv_report.py draws it."""
+    """The whole analysis, as data. the `analyse` command prints it; report.py draws it."""
     report = []
     for k, (a, b) in enumerate(ranges):
         raw = data[a:b]

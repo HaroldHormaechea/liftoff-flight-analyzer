@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-fpv_report.py - turn a Liftoff replay into an illustrated Markdown debrief.
+report.py - turn a replay into an illustrated Markdown debrief.
 
 One command takes a saved replay to a folder holding the decoded CSV, a set of
 SVG figures, an animated SVG replay of every lap, a playable 3D recording of
@@ -8,7 +8,7 @@ every crash and every stall, and a report.md that embeds them all.
 
 Why this exists
 ---------------
-analyze_flight.py answers "what were the numbers". It cannot answer "where on
+analysis.py answers "what were the numbers". It cannot answer "where on
 the track", and the numbers that matter most here are geometric: a line taken
 wide, a corner entered flat, a nose that keeps rotating after the quad has
 stopped moving. Those are pictures. This script draws them from the same samples
@@ -32,7 +32,7 @@ one file is legible on a light and on a dark background.
 Recordings
 ----------
 Crashes and stalls each get a recording: the 3D incident view from
-liftoff_view.py, opened from the event's own row in its table and played back in
+incident_view.py, opened from the event's own row in its table and played back in
 a window inside the page. Environment geometry is drawn when the caches for that
 environment exist and is honestly reported as missing when they do not - the
 path, the attitude and the impacts come from the replay either way. `--no-rec`
@@ -40,11 +40,11 @@ skips them.
 
 Usage
 -----
-  python fpv_report.py --latest
-  python fpv_report.py replays/<archived-replay>.xml
-  python fpv_report.py <replay.xml> -o reports --no-anim
-  python fpv_report.py <replay.xml> --laps "732:1879,1879:3056"
-  python fpv_report.py --latest --no-auto-open
+  python "<clone>/src" report --latest
+  python "<clone>/src" report replays/<archived-replay>.xml
+  python "<clone>/src" report <replay.xml> -o reports --no-anim
+  python "<clone>/src" report <replay.xml> --laps "732:1879,1879:3056"
+  python "<clone>/src" report --latest --no-auto-open
 
 Lap ranges come from the replay metadata automatically; --laps only overrides
 them, for an abandoned attempt worth splitting by hand.
@@ -849,13 +849,13 @@ def write(path, text):
 # marked - opened from its own row in the table and played back in a modal on
 # the page.
 #
-# The renderer is imported from liftoff_view.py, never copied. That file owns
+# The renderer is imported from incident_view.py, never copied. That file owns
 # the projection and the playback; this one owns where the windows are cut and
 # what the page around them looks like.
 #
 # Geometry is best-effort BY DESIGN. An environment's colliders exist only once
-# its scene bundle has been cached (liftoff_scene.py) and prop shapes only once
-# the prefabs have been (liftoff_props.py) - two of five environments flown so
+# its scene bundle has been cached (the `scene` command) and prop shapes only
+# once the prefabs have been (the `props` command) - two of five flown so
 # far. Neither is needed for the part that matters most: where the quad went,
 # how it was pointing and where it stopped all come from the replay itself. A
 # recording with no geometry says so in its own footer rather than not existing.
@@ -1270,7 +1270,7 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
     L += ["---", "",
           "Replay `%s`\u00a0·\u00a0samples in `%s`\u00a0·\u00a0**full analysis, "
           "including everything not drawn above, in `analysis.json`**\u00a0·\u00a0"
-          "generated %s by `fpv_report.py`"
+          "generated %s by `fpv-review`"
           % (Path(meta.get("_source", "?")).name, rel(figs["csv"]),
              datetime.now().strftime("%Y-%m-%d %H:%M"))]
     return "\n".join(L) + "\n"

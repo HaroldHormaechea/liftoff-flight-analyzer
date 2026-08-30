@@ -87,11 +87,13 @@ def geometry_for(replay, track_dir, scenes_dir, props_path):
         if scene.get("skipped"):
             missing.append("%s has no %s geometry" % (env, ", ".join(scene["skipped"])))
     else:
-        missing.append("the %s scene is not cached (liftoff_scene.py)" % env)
+        missing.append("the %s scene is not cached (build it with the `scene` "
+                       "command)" % env)
     shapes = {}
     pp = Path(props_path)
     if pp.exists():
         shapes = json.loads(pp.read_text(encoding="utf-8"))["items"]
     else:
-        missing.append("prop shapes are not cached (liftoff_props.py)")
+        missing.append("prop shapes are not cached (build them with the `props` "
+                       "command)")
     return track, race, scene, shapes, ("; ".join(missing) if missing else "")

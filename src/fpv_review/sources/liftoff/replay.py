@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_replay.py - decode a saved Liftoff replay into CSV.
+replay.py - decode a saved Liftoff replay into CSV.
 
 Liftoff's in-game "save recording" writes an XML file per attempt. It is not a
 video and not an opaque blob: the flight itself is a base64 block of fixed-size
@@ -46,9 +46,9 @@ when re-running against a file already archived.
 
 Usage
 -----
-  python liftoff_replay.py --list
-  python liftoff_replay.py "path/to/replay.xml" -o flight.csv
-  python liftoff_replay.py --latest -o flight.csv
+  python "<clone>/src" replay --list
+  python "<clone>/src" replay "path/to/replay.xml" -o flight.csv
+  python "<clone>/src" replay --latest -o flight.csv
 """
 
 import argparse
@@ -162,7 +162,12 @@ def parse(path):
     return meta, rows
 
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("replay", nargs="?", help="replay xml to decode")
@@ -175,7 +180,10 @@ def main():
                     help="where timestamped copies are kept (default: ./replays)")
     ap.add_argument("--no-archive", action="store_true",
                     help="skip the safety copy; only for a file already archived")
-    args = ap.parse_args()
+    return ap
+
+
+def run(args):
 
     if args.list:
         found = find_replays(args.root)
@@ -232,7 +240,3 @@ def main():
             for r in rows:
                 w.writerow([round(x, 6) for x in r])
         print("wrote %s" % args.out)
-
-
-if __name__ == "__main__":
-    main()

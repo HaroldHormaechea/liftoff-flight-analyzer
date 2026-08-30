@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_pbs.py — read Liftoff's own personal-best records, and keep a history.
+pbs.py — read Liftoff's own personal-best records, and keep a history.
 
 What Liftoff actually stores
 ----------------------------
@@ -19,10 +19,10 @@ blocks as it loads content.
 
 Usage
 -----
-  python liftoff_pbs.py                       # show PBs and diff vs last snapshot
-  python liftoff_pbs.py --save                # also append a snapshot to history
-  python liftoff_pbs.py --history h.json      # use a specific history file
-  python liftoff_pbs.py --root "<LocalLow>/LuGus Studios/Liftoff"
+  python "<clone>/src" pbs                     # show PBs and diff vs last snapshot
+  python "<clone>/src" pbs --save              # also append a snapshot to history
+  python "<clone>/src" pbs --history h.json    # use a specific history file
+  python "<clone>/src" pbs --root "<LocalLow>/LuGus Studios/Liftoff"
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_tracks.py - extract Liftoff's track and race geometry from the game.
+tracks.py - extract Liftoff's track and race geometry from the game.
 
 A saved replay says WHERE the quad went. It does not say where the track was.
 Without the gates, "he went wide" is an opinion; with them it is a number - the
@@ -24,12 +24,12 @@ game has been patched.
 
 Usage
 -----
-  python liftoff_tracks.py --check         # is the data present and current?
-  python liftoff_tracks.py                 # extract if not; no-op if current
-  python liftoff_tracks.py --force         # re-extract regardless
-  python liftoff_tracks.py --list          # what was extracted
-  python liftoff_tracks.py --gates TRACK   # gate geometry for one track
-  python liftoff_tracks.py --for-replay X  # which track a replay was flown on
+  python "<clone>/src" tracks --check         # is the data present and current?
+  python "<clone>/src" tracks                 # extract if not; no-op if current
+  python "<clone>/src" tracks --force         # re-extract regardless
+  python "<clone>/src" tracks --list          # what was extracted
+  python "<clone>/src" tracks --gates TRACK   # gate geometry for one track
+  python "<clone>/src" tracks --for-replay X  # which track a replay was flown on
 
 WHY A READINESS CHECK EXISTS
 ----------------------------
@@ -508,7 +508,12 @@ def cmd_list(args, index_dir):
              index.get("source", {}).get("build_id") or "?"))
 
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-o", "--out", default="trackdata",
@@ -527,7 +532,10 @@ def main():
     parser.add_argument("--max-bundle-mb", type=int, default=unityfs.MAX_BUNDLE_MB,
                         help="largest bundle to open while searching (default: %d)"
                              % unityfs.MAX_BUNDLE_MB)
-    args = parser.parse_args()
+    return parser
+
+
+def run(args):
 
     game = find_game(args.game_dir)
 
@@ -564,7 +572,3 @@ def main():
                  "Pass --game-dir, or set LIFTOFF_DIR, pointing at the folder that holds "
                  "Liftoff_Data.")
     extract(args.out, game, max_mb=args.max_bundle_mb)
-
-
-if __name__ == "__main__":
-    main()

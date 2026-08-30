@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-liftoff_props.py - collider shapes for the items a track is built from.
+props.py - collider shapes for the items a track is built from.
 
 A Track XML says a `GenericRamp01` sits at (x, y, z) turned 47 degrees. It does
 not say what a GenericRamp01 IS. That shape lives in a prefab, and without it
@@ -11,9 +11,9 @@ This scans the game's prefab bundles once and writes `props.json`: for each
 `itemID`, its colliders in the prefab's OWN frame. Placing one is then just the
 Track XML's position and yaw applied to that shape.
 
-    python liftoff_props.py                      # build the table
-    python liftoff_props.py --show GenericRamp01 # what one item looks like
-    python liftoff_props.py --check              # is it present and current?
+    python "<clone>/src" props                      # build the table
+    python "<clone>/src" props --show GenericRamp01 # what one item looks like
+    python "<clone>/src" props --check              # is it present and current?
 
 Prefabs are name-keyed, which is the whole reason this is cheap: a GameObject
 literally called `ConradCrowdControlBarrier01` is the barrier the Track XML
@@ -31,7 +31,7 @@ across 92 tracks, instead of geometry baked per instance.
 
 WHAT IS SKIPPED
 ---------------
-MeshColliders, as in `liftoff_scene.py`. Most track furniture is boxes and
+MeshColliders, as in `scene.py`. Most track furniture is boxes and
 capsules, but a few shapes - some arches especially - are mesh-only and will
 come out empty. An item with no primitive colliders is recorded with an empty
 list rather than omitted, so a consumer can tell "known to have no box shape"
@@ -365,7 +365,12 @@ def load(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--track-dir", default="trackdata")
@@ -374,7 +379,10 @@ def main():
     ap.add_argument("--check", action="store_true", help="present and current? exit 1 if not")
     ap.add_argument("--show", metavar="ITEM", help="print one item's collider shape")
     ap.add_argument("--max-bundle-mb", type=int, default=MAX_BUNDLE_MB)
-    args = ap.parse_args()
+    return ap
+
+
+def run(args):
     out = Path(args.out) if args.out else Path(args.track_dir) / "props.json"
 
     if args.check:
@@ -425,7 +433,3 @@ def main():
               % (out, table["counts"]["found"], table["generated"]))
         return
     build(args.track_dir, out, args.max_bundle_mb)
-
-
-if __name__ == "__main__":
-    main()

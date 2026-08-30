@@ -73,11 +73,18 @@ class FlightSample:
 class FlightSeries:
     """A whole flight, sampled. The unit of transport between every stage."""
     samples: List[FlightSample] = field(default_factory=list)
-    sample_dt: Optional[float] = None   # s, the MEASURED MEDIAN interval, never
-                                        # a first difference: Liftoff's timestamps
-                                        # are irregular (0.003-0.197 s observed)
-                                        # and a first difference once scaled every
-                                        # duration in the report by up to 1.9x
+    # s, the MEASURED MEDIAN interval, never a first difference: Liftoff's
+    # timestamps are irregular (0.003-0.197 s observed) and a first difference
+    # once scaled every duration in the report by up to 1.9x.
+    #
+    # DECLARED BUT NOT POPULATED BY THE LIFTOFF SOURCE, deliberately. Liftoff's
+    # interval is measured downstream by common/analysis.sample_dt(), which is
+    # the authority and is unchanged by this migration; moving where that number
+    # comes from would be a behaviour change, and this restructure is meant to
+    # have none. A second sim that knows its own rate should set this, and
+    # unifying the two is a follow-up rather than part of the move. There is
+    # exactly one implementation of the median - never write a second.
+    sample_dt: Optional[float] = None
     source: Optional[str] = None        # the sim this came from, e.g. "liftoff"
 
     def __len__(self):
@@ -114,6 +121,95 @@ class LapSet:
     names: List[str] = field(default_factory=list)            # segment labels
 
 
+# ---------------------------------------------------------------- geometry
+# Every field below is traced to a reader that exists today in analysis.py,
+# incident_view.py or report.py. Nothing is here because a hypothetical sim
+# might have it. The first real second sim will change this contract, and that
+# is expected rather than a failure.
+
+
+@dataclass
+class Gate:
+    """One scoring checkpoint of a race, in the order it must be flown.
+
+    A gate is a SCORING VOLUME, not a hole: the environment may obstruct any
+    part of it, so anything drawing a racing line has to intersect the aperture
+    against world geometry first."""
+    pos: Tuple[float, float, float]              # metres
+    yaw: float                                   # degrees, Euler Y
+    aperture: Optional[Tuple[float, float]] = None   # width, height in metres,
+                                                     # None when the prefab's
+                                                     # opening is baked into it
+    order: Optional[int] = None                  # position along the route
+
+
+@dataclass
+class TrackGeometry:
+    """Where the track is: the route, and everything placed along it."""
+    gates: List[Gate] = field(default_factory=list)
+    items: List["PropPlacement"] = field(default_factory=list)
+    provenance: Optional[str] = None    # which build/cache these came from
+
+
+@dataclass
+class Collider:
+    """One primitive solid, in the frame stated at the top of this module.
+
+    Boxes, spheres and capsules only: they are what the games author collision
+    with, so nothing has to be decimated. `trigger` matters - a pit volume or a
+    checkpoint is flown THROUGH, and drawing it as an obstacle invents
+    collisions that cannot happen."""
+    kind: str                                    # "box" | "sph" | "cap"
+    pos: Tuple[float, float, float]              # metres
+    rot: Tuple[float, float, float, float]       # quaternion x, y, z, w
+    half_extents: Optional[Tuple[float, float, float]] = None   # metres, box
+    radius: Optional[float] = None               # metres, sphere and capsule
+    height: Optional[float] = None               # metres, capsule
+    axis: Optional[int] = None                   # 0/1/2, capsule's long axis
+    trigger: bool = False                        # not solid; do not draw as one
+
+
+@dataclass
+class PropPlacement:
+    """An item the track places, with its shape if the sim can supply one.
+
+    Position and rotation are exact; the shape often is not, because items are
+    instantiated from prefabs at runtime and are not in the environment's own
+    geometry. A placement with no colliders is drawn as a marker saying
+    "something is here", never as a claim about what it looks like."""
+    name: str
+    kind: str                                    # "gate" | "trigger" | "prop"
+    pos: Tuple[float, float, float]              # metres
+    yaw: float                                   # degrees
+    colliders: List[Collider] = field(default_factory=list)
+    aperture: Optional[Tuple[float, float]] = None   # metres, gates only
+
+
+@dataclass
+class WorldGeometry:
+    """The static environment: what the craft can actually hit."""
+    colliders: List[Collider] = field(default_factory=list)
+    bounds: Optional[Tuple[Tuple[float, float, float],
+                           Tuple[float, float, float]]] = None   # lo, hi, metres
+    provenance: Optional[str] = None
+    missing: List[str] = field(default_factory=list)   # what could not be read,
+                                                       # named so a degraded view
+                                                       # can say what it lacks
+
+
+@dataclass
+class PbSnapshot:
+    """Personal bests as they stood at one moment.
+
+    Sims overwrite their own best-time files, so a beaten time is gone unless
+    something snapshotted it. This is that record."""
+    taken_at: Optional[str] = None               # ISO 8601
+    best_race: Optional[float] = None            # s
+    best_lap: Optional[float] = None             # s
+    all_races: List[float] = field(default_factory=list)   # s
+    all_laps: List[float] = field(default_factory=list)    # s
+
+
 def read_csv(path):
     """A FlightSeries from a flight.csv, or from any CSV carrying these columns.
 
@@ -122,7 +218,7 @@ def read_csv(path):
     stage that was handed a file instead of a series.
 
     TOLERANT OF MISSING COLUMNS, because it has to be. A capture from
-    liftoff_telemetry.py carries no speed columns and may carry no velocity
+    a sim's telemetry capture carries no speed columns and may carry no velocity
     either, and analysing one has always been supported. The fallbacks below are
     the ones common/analysis.load() used to apply itself when it read the file
     directly: absent field -> 0.0, absent velocity -> central difference on

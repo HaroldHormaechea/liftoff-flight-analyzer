@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-liftoff_scene.py - extract an environment's collision geometry, and cull it to
+scene.py - extract an environment's collision geometry, and cull it to
 an incident.
 
-`liftoff_tracks.py` says where the gates are. This says where the WORLD is: the
+`tracks.py` says where the gates are. This says where the WORLD is: the
 containers, walls, arches, poles and floors the quad can actually hit. Without
 it a crash renders as a drone stopping in mid-air for no visible reason.
 
@@ -14,12 +14,12 @@ LiftoffArena 95% of the collision geometry is those three primitives.
 
 Two commands:
 
-  python liftoff_scene.py --environment LiftoffArena
+  python "<clone>/src" scene --environment LiftoffArena
       Extract every collider in the environment to world space and cache it as
       scenes/<Environment>.json. Slow (seconds to a minute) and rarely needed:
       only on a first run or after the game patches.
 
-  python liftoff_scene.py --cull --environment LiftoffArena \
+  python "<clone>/src" scene --cull --environment LiftoffArena \
       --flight reports/<stem>/flight.csv --at 6.0 --pad 2.0 --radius 30
       Emit only the colliders near where the quad was between t-pad and t+pad.
       Fast, and the shape a report figure embeds.
@@ -44,7 +44,7 @@ Bundle filenames are content hashes and change on every patch, and the
 environment name is not reliably inside the bundle either - matching on it
 resolves about half of them and silently mismatches others. So identification
 is geometric: a scene bundle IS the environment whose known gate positions fall
-inside its collider cloud. `liftoff_tracks.py` already has every gate position,
+inside its collider cloud. `tracks.py` already has every gate position,
 which makes this a cheap and unambiguous test, and the answer is cached.
 
 Streamed scene bundles are told apart from the other 250-odd bundles by their
@@ -369,11 +369,11 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
     game = tracks.find_game()
     if game is None:
         sys.exit("could not find the Liftoff install. Set LIFTOFF_DIR, or check "
-                 "liftoff_tracks.py --check.")
+                 "the `tracks --check` command.")
     cloud = gate_cloud(track_dir, environment)
     if not cloud:
-        sys.exit("no gates known for environment %r - run liftoff_tracks.py first, and check "
-                 "the name with liftoff_tracks.py --list." % environment)
+        sys.exit("no gates known for environment %r - run the `tracks` command "
+                 "first, and check the name with `tracks --list`." % environment)
     toolkit.refuse_inside_toolkit(out_dir, "extracted scene geometry")
 
     bundles = tracks.bundle_dir(game)
@@ -480,12 +480,17 @@ def path_window(flight_csv, at, pad):
 
 # ----------------------------------------------------------------------- main
 
-def main():
+def build_parser():
+    """The CLI for this module, borrowed whole by cli.py.
+
+    The parser lives here rather than in cli.py so that every flag, default
+    and help string stays beside the code that reads it; cli.py adopts it
+    with argparse's `parents=`, which copies rather than restates."""
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--environment", help="environment name, e.g. LiftoffArena")
     parser.add_argument("--track-dir", default="trackdata",
-                        help="where liftoff_tracks.py wrote index.json (default: ./trackdata)")
+                        help="where the `tracks` command wrote index.json (default: ./trackdata)")
     parser.add_argument("-o", "--out", default=None,
                         help="scene cache directory (default: <track-dir>/scenes)")
     parser.add_argument("--force", action="store_true", help="rebuild even if cached")
@@ -505,7 +510,10 @@ def main():
     parser.add_argument("--radius", type=float, default=DEFAULT_RADIUS,
                         help="metres around the path to keep (default: %.0f)" % DEFAULT_RADIUS)
     parser.add_argument("--json", action="store_true", help="machine-readable output")
-    args = parser.parse_args()
+    return parser
+
+
+def run(args):
 
     out_dir = Path(args.out) if args.out else Path(args.track_dir) / "scenes"
 
@@ -562,7 +570,3 @@ def main():
         return
     build(args.environment, args.track_dir, out_dir, witness=args.witness,
           bundle=args.bundle, max_mb=args.max_bundle_mb)
-
-
-if __name__ == "__main__":
-    main()

@@ -9,7 +9,7 @@ shared engine layer: hoisting it would be generalising ahead of a second Unity
 sim whose bundles nobody has opened yet, which is exactly what PROJECT_BRIEF.md
 rules out. When that sim arrives, this is the file to promote.
 
-liftoff_scene.py reaches in here by private name for `_cstr` and `lz4_block` -
+scene.py reaches in here by private name for `_cstr` and `lz4_block` -
 it reads the same container with a different object table in mind - so those two
 are deliberately importable rather than folded into their callers.
 

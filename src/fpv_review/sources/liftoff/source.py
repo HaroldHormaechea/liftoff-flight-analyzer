@@ -18,7 +18,15 @@ SIM_NAME = "liftoff"
 
 
 def load_flight(path):
-    """Decode one archived replay -> (SessionMeta, FlightSeries, LapSet).
+    """Decode one archived replay -> (SessionMeta, FlightSeries, LapSet, meta).
+
+    FOUR values, not the three the schema alone would suggest. The fourth is the
+    sim's raw metadata dict, and it travels because report.py writes it verbatim
+    into analysis.json's `meta` key: that key is a PUBLISHED RECORD, read by a
+    later machine, so reshaping it is a change to the output rather than to the
+    architecture. SessionMeta is the typed view of the same data and is what a
+    second sim should populate; the raw dict is Liftoff's own and downstream
+    code other than that one key must not read it.
 
     The row list that replay.parse() and kinematics.add_velocity() pass between
     them stays exactly as it was - it is Liftoff's own decode buffer, laid out in

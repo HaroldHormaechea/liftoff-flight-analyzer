@@ -27,6 +27,14 @@ IMPACT_DEBOUNCE_SAMPLES = 3     # a two-sample collapse is one impact, not two
 
 PROP_NOMINAL = (0.6, 1.0, 0.6)  # half-extents for a prop whose shape is unknown
 
+# ------------------------------------------------------------- track scale
+# Metres, chosen against Liftoff's tracks. A sim with larger or smaller
+# circuits wants different numbers; seconds of animation and frames of SVG do
+# not, and those stay in common/.
+
+REC_RADIUS_M = 25.0             # environment geometry drawn around a recording
+CAM_SPAN_M = 45.0               # width of the follow cam on a lap animation
+
 # -------------------------------------------------------- analysis thresholds
 # Every numeric default in common/analysis.py's parser, keyed by its argparse
 # `dest`. These were fixed empirically against one Liftoff flight - the Rustline

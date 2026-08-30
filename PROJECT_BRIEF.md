@@ -13,7 +13,7 @@ build:
   tool: none
   commands: {test: null, lint: null, format: null}
 paths:
-  production: ["scripts/**", "SKILL.md"]
+  production: ["src/**", "SKILL.md", "pyproject.toml", "docs/**"]
   test: []
   api_boundary: []
 test:
@@ -323,54 +323,66 @@ rather than guessed; see **Quality Standards**.
 self-contained `report.html`) + Claude Code skill host (`SKILL.md`). No server,
 no mobile, no packaged desktop binary.
 
-**Service shape.** *Modular monolith, expressed as a set of cooperating CLI
-modules.* Nine single-purpose Python modules in `scripts/`, each independently
-runnable with its own `argparse` CLI and `main()`, and each also importable as a
-library. `fpv_report.py` is the composition root: it imports the others rather
-than shelling out to them or re-deriving their results.
+**Service shape.** *Modular monolith, expressed as one CLI over two layered
+packages.* Single-purpose Python modules under `src/fpv_review/`, split into
+`common/` (sim-agnostic) and `sources/<sim>/` (everything that knows a
+particular game's file formats), with `cli.py` the only module importing both.
+Every module still exposes `build_parser()` and is importable as a library;
+what changed on 2026-08-30 is that there is one front door,
+`python "<clone>/src" <command>`, rather than nine runnable scripts.
+`common/report.py` is the composition root: it imports the others rather than
+shelling out to them or re-deriving their results.
 
-The load-bearing rule is **embed, never duplicate**. `fpv_report.py` calls
-`analyze_flight.build_parser()` for the thresholds and `analyze_flight.analyse()`
-for the numbers, so a figure and a table can never disagree and a threshold added
-once reaches both. Likewise the 3D viewer has exactly one implementation —
-`liftoff_view.build()` cuts the window and `VIEWER_JS` draws it — used by both
-the standalone page and the in-report recordings, so there is one projection, one
-playback loop, and one place to fix either.
+The load-bearing rule is **embed, never duplicate**. `cli.py` calls
+`analysis.build_parser()` for the thresholds and `analysis.analyse()` for the
+numbers, so a figure and a table can never disagree and a threshold added once
+reaches both — and the `analyse` subcommand adopts that very parser with
+argparse's `parents=` rather than restating it. Likewise the 3D viewer has
+exactly one implementation — `incident_view.build()` cuts the window and
+`VIEWER_JS` draws it — used by both the standalone page and the in-report
+recordings, so there is one projection, one playback loop, and one place to fix
+either.
 
 **Components.**
 
 | component | runtime | responsibility |
 |---|---|---|
 | `SKILL.md` | Claude Code agent | Orchestration and coaching policy. Pilot-profile lookup, mandatory track-data check, report build, figure reading, Debrief authorship, persistence. The only component that exercises judgement. |
-| `scripts/fpv_report.py` | Python CLI | Composition root. Archives, decodes, analyses, draws every figure and animation, builds recordings, emits `report.md` / `report.html` / `analysis.json`, opens the browser. ~2100 lines; the largest module by far. |
-| `scripts/analyze_flight.py` | Python CLI + library | Flight geometry and verdicts: sideslip, tilt, turn radius, corner detection, yaw-only time, stall detection and the overrun/corner/hesitation decision table. The measurement authority. |
-| `scripts/liftoff_replay.py` | Python CLI + library | Locates and archives the volatile in-game replay, decodes `statesByte` to CSV. Also owns `refuse_inside_toolkit()`, imported by the other modules purely for that guard. |
-| `scripts/liftoff_tracks.py` | Python CLI + library | Finds the Liftoff install, extracts track and race XML from Unity bundles, writes `index.json`, answers `--for-replay`, `--gates`, `--check`. |
-| `scripts/liftoff_scene.py` | Python CLI + library | Static environment collision geometry from a scene bundle, and the cull to one incident. Needs `UnityPy`. |
-| `scripts/liftoff_props.py` | Python CLI + library | Collider shapes for track props, in each prop's own frame. Needs `UnityPy`. |
-| `scripts/liftoff_view.py` | Python CLI + library | The 3D incident view: geometry assembly, path, orbit, scrub. Standalone page and embedded recordings share it. |
-| `scripts/liftoff_pbs.py` | Python CLI | Snapshots the game's ratcheting PB files to `data/liftoff_history.json`. The only module importing nothing else in the project. |
+| `src/__main__.py` + `src/fpv_review/cli.py` | Python CLI | The single front door and the wiring layer: nine subcommands, and the only module permitted to import both trees. |
+| `common/report.py` | Python library | Composition root. Draws every figure and animation, builds the recordings, emits `report.md` / `report.html`. The largest module by far. |
+| `common/analysis.py` | Python library | Flight geometry and verdicts: sideslip, tilt, turn radius, corner detection, yaw-only time, stall detection and the overrun/corner/hesitation decision table. The measurement authority, and sim-agnostic: it receives its thresholds. |
+| `common/schema.py` | Python library | The dataclasses every artifact crosses a stage boundary as, and their CSV serialisation. The contract a sim implements. |
+| `common/incident_view.py` | Python library | The 3D incident view: geometry assembly, path, orbit, scrub. Standalone page and embedded recordings share it. |
+| `common/{geometry,kinematics,pbs,toolkit,capabilities}.py` | Python library | Quaternion maths and the cull; derived velocity; the PB history store; the `refuse_inside_toolkit()` guard and the two-marker toolkit-root search; the capability declaration. |
+| `sources/liftoff/source.py` | Python library | The seam: decodes one replay into the shared schema. The one function a second sim must provide. |
+| `sources/liftoff/{replay,tracks,scene,props,telemetry}.py` | Python library | Everything that knows what Liftoff's bytes mean: replay decode and archive, track and race XML, environment colliders, prop shapes, the live UDP feed. |
+| `sources/liftoff/{unityfs,map_geometry_generator,calibration,capabilities}.py` | Python library | The dependency-free UnityFS reader; the map façade over tracks + scene + props; the constants measured on Liftoff; what a Liftoff replay does not contain. |
 
 **Communication.** In-process Python imports only. No HTTP, no RPC, no queue, no
 IPC. The dependency graph is acyclic and shallow:
 
 ```
-              fpv_report.py  (composition root)
-              /     |      \        \
-   analyze_flight  liftoff_replay  liftoff_tracks  liftoff_view
-                        ^                ^            /   |
-                        |                |     liftoff_scene (UnityPy)
-                        +----------------+            |
-                                          liftoff_props (UnityPy)
-   liftoff_pbs.py       (standalone)
-   liftoff_telemetry.py (standalone, dormant)
+                    cli.py   (the only module importing both trees)
+                   /      \
+            common/          sources/liftoff/
+                                                                        
+  report.py (composition root)   source.py  (the seam: replay -> schema)
+  analysis.py                    replay.py    tracks.py    scene.py
+  incident_view.py               props.py     telemetry.py unityfs.py
+  schema.py  geometry.py         map_geometry_generator.py
+  kinematics.py  pbs.py          calibration.py  capabilities.py
+  toolkit.py  capabilities.py
+
+  common/ may import common/ and the stdlib, and nothing else.
+  sources/<sim>/ may import common/ and its own siblings, never another sim.
+  cli.py imports both, and does the wiring.
 ```
 
-`liftoff_replay` is the leaf everything depends on — including
-`liftoff_tracks.py`, which imports it for `refuse_inside_toolkit()` *and nothing
-else*, a dependency the source annotates explicitly.
+`common/toolkit.py` is the leaf everything depends on — `tracks.py`, `scene.py`
+and `props.py` import it for `refuse_inside_toolkit()` *and nothing else*, a
+dependency the source annotates explicitly.
 
-The one external protocol is **UDP on loopback** (`liftoff_telemetry.py`
+The one external protocol is **UDP on loopback** (`sources/liftoff/telemetry.py`
 receiving `127.0.0.1:9001` at 100 Hz), dormant by default.
 
 **Async workloads.** None. Every run is synchronous, batch, and terminates.
@@ -447,8 +459,10 @@ the finished report); Liftoff's UDP telemetry endpoint.
 state. The nearest analogue is the pilot profile, which makes the tool
 per-person by pointing it at a different profile and data root.
 
-**Planned direction — multi-sim structure.** *Decided by the author,
-2026-08-30. Not built; nothing below describes the code as it stands today.*
+**Multi-sim structure — BUILT.** *Decided by the author 2026-08-30 and
+implemented the same day; the four points below now describe the code as it
+stands. The decisions, and the alternatives each one beat, are recorded in
+[`docs/adr/0001-multi-sim-architecture.md`](docs/adr/0001-multi-sim-architecture.md).*
 
 The project is intended to grow beyond Liftoff, and the author's chosen route is
 structural separation rather than per-sim branching inside the existing modules:
@@ -474,16 +488,24 @@ structural separation rather than per-sim branching inside the existing modules:
    never one that infers them. This is the same rule the project already applies
    to missing collision geometry.
 
-Constraints on getting there: no speculative generalisation ahead of a second
-real sim (the format should be designed against Liftoff's data plus one
-concrete other sim's actual capabilities, not against a hypothetical one); no
-new third-party dependency; the module-is-both-CLI-and-library convention holds
-for the new layout; and the naming will need revisiting, since a `liftoff_`
-prefix on a sim-agnostic module would be actively misleading.
+The constraints were held to. No speculative generalisation: every field in
+`common/schema.py` is traced to a reader that exists today, no stub packages
+were created for sims whose data nobody has inspected, and the general UnityFS
+reader was deliberately NOT hoisted to a shared engine layer. No new
+third-party dependency. The `liftoff_` prefix is gone from what is now
+sim-agnostic. One convention did change, knowingly: the nine modules no longer
+each run by path — `build_parser()` survives in every module, but there is one
+front door instead of nine, `python "<clone>/src" <command>`.
 
-**Path scopes for the dev-team.** `paths.production` is `scripts/**` plus the
-root `SKILL.md`, since the skill definition is a first-class deliverable and not
-documentation. `README.md`, `scripts/README.md`, `examples/**`, `LICENSE` and the
+The contract is minimal and honest rather than complete: it was designed
+against Liftoff plus what the analysis consumes, and the first real second sim
+will change it. That is expected, not a failure.
+
+**Path scopes for the dev-team.** `paths.production` is `src/**` plus the root
+`SKILL.md`, `pyproject.toml` and `docs/**` — the skill definition is a
+first-class deliverable rather than documentation, `pyproject.toml` is
+load-bearing for the toolkit-root search, and `docs/` now holds both the
+engineering notes and the ADRs. `README.md`, `examples/**`, `LICENSE` and the
 banner images are deliberately outside the production scope: they are
 human-authored or committed artifacts and should not be rewritten as a side
 effect of a code change. `paths.test` is empty — see **Quality Standards**.
@@ -638,12 +660,14 @@ near-identical geometry repeatedly. The real budget is implicit: a review must
 feel interactive inside a conversation.
 
 **Documentation.** README-plus, and unusually thorough for the size: a
-pilot-facing root `README.md`, a 350-line engineering `scripts/README.md` that
+pilot-facing root `README.md`, a long engineering `docs/engineering.md` that
 doubles as design-rationale documentation, a 17 KB procedural `SKILL.md`, and a
-committed example report. No ADR directory — the rationale lives inline in the
-READMEs and docstrings instead, which is a legitimate choice at this size. *If
-the project grows, ADRs would be the natural next step;* the material already
-exists in prose.
+committed example report, and — since 2026-08-30 — an ADR directory at
+`docs/adr/`, opened by the multi-sim restructure because that decision needed
+its rejected alternatives recorded somewhere a later reader would find them.
+Inline rationale in docstrings remains the norm for local choices and is still
+the project's strongest quality mechanism; ADRs are for decisions that shape
+the whole tree. `scripts/README.md` is now `docs/engineering.md`.
 
 **Observability.** Stdout only, and appropriately so for a local batch CLI. No
 logging framework, metrics or tracing, and none warranted. The relevant

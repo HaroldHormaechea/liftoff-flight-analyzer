@@ -10,7 +10,7 @@ by sailing past the gate and doubling back, or by stopping to rotate the quad
 because the turn never bent the path in the first place. Watching the replay back
 rarely settles it — the tell is in the stick inputs, and those are invisible.
 
-This is a coach for [Liftoff: FPV Drone Racing](https://www.lugus-studios.be/liftoff)
+This is a coach for [Liftoff: FPV Drone Racing](https://www.lugus-studios.be/portfolio/liftoff-fpv-drone-racing)
 that reads your saved in-game replays and answers that question with numbers
 instead of impressions. It reconstructs what the quad and your hands were
 actually doing through every corner of every lap, finds each place you lost time,

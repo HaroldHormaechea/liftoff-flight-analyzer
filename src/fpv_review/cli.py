@@ -58,6 +58,46 @@ SIMS = {"liftoff": {"calibration": calibration,
                     "telemetry": telemetry,
                     "tracks": tracks}}
 
+# One declaration, three consumers: the contract check in check_sim(), the
+# per-command gating in build_parser(), and the epilog that names what a partial
+# package leaves out. Two hand-maintained lists of the same surface would be a
+# drift risk built into the fix for a drift, so there is one.
+#
+# The four required keys are ADR-0001 decision 4's contract. A package with only
+# those registers and gets `analyse` and `report`; before this table existed it
+# raised KeyError('replay') while the parser was still being built. The six
+# optional keys are per-sim extras, and --help names the commands they add.
+SIM_MODULES = {
+    "calibration":  ("calibration.py",            True,  "the constants the analysis reads"),
+    "capabilities": ("capabilities.py",           True,  "what the sim cannot supply"),
+    "source":       ("source.py",                 True,  "decoding a replay into the schema"),
+    "map":          ("map_geometry_generator.py", True,  "track and world geometry"),
+    "replay":       ("replay.py",                 False, "finding and archiving replays"),
+    "pbs":          ("pbs.py",                    False, "personal bests"),
+    "tracks":       ("tracks.py",                 False, "the track index"),
+    "scene":        ("scene.py",                  False, "environment collision geometry"),
+    "props":        ("props.py",                  False, "prop collider shapes"),
+    "telemetry":    ("telemetry.py",              False, "the live telemetry feed"),
+}
+
+SIM_CONTRACT = tuple(k for k, (_file, required, _adds) in SIM_MODULES.items() if required)
+
+# The module-level names the analysis and the two view paths read off a sim's
+# calibration. The 20 THRESHOLDS keys are deliberately not listed here:
+# common/analysis.py's build_parser() reads every one of them while the analyse
+# subcommand is being registered, so a missing key is already refused there by
+# name - see add_analyse() below. They stay encoded in the one place that has
+# always held them.
+CALIBRATION_NAMES = ("THRESHOLDS", "IMPACT_DROP_KMH", "IMPACT_DEBOUNCE_SAMPLES",
+                     "PROP_NOMINAL", "REC_RADIUS_M", "CAM_SPAN_M")
+
+# Which optional module each gated command needs. The gating and the epilog both
+# read this, so a command cannot be left out on one key and then reported as
+# needing another. The sim's own subcommands are gated on the key SIM_COMMANDS
+# already names, so they are not repeated here.
+GATED_COMMANDS = (("view", ("tracks", "scene")),
+                  ("pbs", ("pbs",)))
+
 
 # ------------------------------------------------------------------------ view
 
@@ -143,15 +183,26 @@ def cmd_view(args, sim):
 
 # --------------------------------------------------------------------- analyse
 
-def add_analyse(sub, sim):
+def add_analyse(sub, sim, sim_name):
     """The analysis parser, borrowed whole from common/analysis.py.
 
     `parents=` copies every flag, type, default, group and help string rather
     than restating them here, so the subcommand and the embedded analysis can
     never drift apart. The defaults inside it come from the sim's calibration -
-    that is why the parser has to be built with one in hand."""
+    that is why the parser has to be built with one in hand.
+
+    Building it is also where a missing threshold surfaces: the borrowed parser
+    reads all 20 THRESHOLDS keys, so the KeyError is caught here and turned into
+    a stated refusal naming the key and the file it belongs in. The keys
+    themselves stay encoded only in common/analysis.py. This adds a message, not
+    a second list."""
+    try:
+        parent = analysis.build_parser(sim["calibration"])
+    except KeyError as exc:
+        sys.exit("sim %r has no calibration threshold %s.\nAdd it to sources/%s/%s."
+                 % (sim_name, exc, sim_name, SIM_MODULES["calibration"][0]))
     ap = sub.add_parser("analyse", prog="%s analyse" % PROG, add_help=False,
-                        parents=[analysis.build_parser(sim["calibration"])],
+                        parents=[parent],
                         description=analysis.__doc__,
                         formatter_class=argparse.RawDescriptionHelpFormatter,
                         help="flight geometry, corners and stalls from a flight csv")
@@ -240,7 +291,15 @@ def add_report(sub, sim):
     ap.add_argument("replay", nargs="?", help="replay XML; omit with --latest")
     ap.add_argument("--latest", action="store_true",
                     help="take the newest replay from the Liftoff Recordings folder")
-    ap.add_argument("--root", default=str(sim["replay"].DEFAULT_ROOT),
+    # A sim without a replay module still gets `report` on an explicit path,
+    # which is what the contract exists for; cmd_report refuses the other route
+    # with a stated reason. Byte-critical: this parser uses
+    # RawDescriptionHelpFormatter, which does not print defaults, and the help
+    # string names none, so the value never reaches --help. Any edit to this
+    # argument's help, its order or the formatter moves the help output, and
+    # unlike the epilog nothing strips the difference.
+    ap.add_argument("--root",
+                    default=str(sim["replay"].DEFAULT_ROOT) if "replay" in sim else None,
                     help="Recordings folder")
     ap.add_argument("--archive-dir", default="replays",
                     help="where the safety copy of a --latest replay goes")
@@ -308,6 +367,13 @@ def cmd_report(args, sim):
 
     path = Path(args.replay) if args.replay else None
     if args.latest or path is None:
+        # Both routes into this branch: --latest, and omitting the positional
+        # replay. Nothing has been written yet, so refusing here leaves no
+        # half-built output directory behind.
+        if "replay" not in sim:
+            sys.exit("sim %r cannot find a replay for you: it has no %s.\n"
+                     "Pass the path to a replay file instead."
+                     % (args.sim, SIM_MODULES["replay"][0]))
         found = sim["replay"].find_replays(args.root)
         if not found:
             sys.exit("No replays under %s. Save one from the finish or pause screen." % args.root)
@@ -599,7 +665,14 @@ SIM_COMMANDS = [
 
 
 def add_sim_commands(sub, sim):
+    """Register each sim subcommand whose module this sim package provides.
+
+    A package without one is not an error: the command is left out, and the
+    top-level epilog names it and the file that would add it. omitted_commands()
+    computes the same set from the same tables, so the two cannot disagree."""
     for name, key, blurb in SIM_COMMANDS:
+        if key not in sim:
+            continue
         module = sim[key]
         ap = sub.add_parser(name, prog="%s %s" % (PROG, name), add_help=False,
                             parents=[module.build_parser()],
@@ -631,18 +704,89 @@ def pick_sim(argv):
     return known.sim
 
 
+def check_sim(sim, sim_name):
+    """Refuse an unregistrable sim package, before a command runs or a file is written.
+
+    Keys, not callables. The function surface each module must expose is
+    documented in ADR-0001 decision 4 and enforced by first use; importing and
+    introspecting the modules here would put that contract in a second place,
+    which is the drift this whole check exists to prevent. The six calibration
+    names are the exception, because they are attributes of a module that is
+    already imported rather than a question about behaviour.
+
+    A refusal names the module as well as the key. A contributor reading
+    `missing: capabilities` should not have to work out which file that means."""
+    missing = [k for k in SIM_CONTRACT if k not in sim]
+    if missing:
+        sys.exit("sim %r is missing part of the per-sim contract:\n%s"
+                 % (sim_name,
+                    "\n".join("  %-12s sources/%s/%s"
+                              % (k, sim_name, SIM_MODULES[k][0]) for k in missing)))
+    absent = [n for n in CALIBRATION_NAMES if not hasattr(sim["calibration"], n)]
+    if absent:
+        sys.exit("sim %r calibration does not define %s.\nAdd it to sources/%s/%s."
+                 % (sim_name, ", ".join(absent), sim_name,
+                    SIM_MODULES["calibration"][0]))
+
+
+def omitted_commands(sim):
+    """The commands this sim's package cannot support, in registration order.
+
+    Computed before the parser exists, because the epilog naming them is a
+    constructor argument. build_parser() gates on this same list, so a command
+    cannot be left out and then go unmentioned, or be mentioned and then
+    registered anyway."""
+    out = []
+    for name, keys in GATED_COMMANDS:
+        absent = tuple(k for k in keys if k not in sim)
+        if absent:
+            out.append((name, absent))
+    for name, key, _blurb in SIM_COMMANDS:
+        if key not in sim:
+            out.append((name, (key,)))
+    if "replay" not in sim:
+        out.append(("report --latest", ("replay",)))
+    return out
+
+
+def omitted_epilog(omitted, sim_name):
+    """What this sim leaves out, and the module a contributor would add for it."""
+    lines = ["not available for sim %r:" % sim_name]
+    lines += ["  %-16s needs %s"
+              % (name, ", ".join("sources/%s/%s" % (sim_name, SIM_MODULES[k][0])
+                                 for k in keys))
+              for name, keys in omitted]
+    return "\n".join(lines)
+
+
 def build_parser(sim_name=DEFAULT_SIM):
     sim = SIMS[sim_name]
+    # First, so a package that cannot support the commands is refused before one
+    # of them runs and before anything is written.
+    check_sim(sim, sim_name)
+
+    omitted = omitted_commands(sim)
+    skipped = {name for name, _keys in omitted}
+    # The epilog goes on the top-level parser, last, and nowhere else. When
+    # nothing is omitted the keyword is not passed at all. An empty epilog would
+    # in fact cost nothing here - format_help() ends with help.strip("\n"), which
+    # erases it because the epilog is last, measured rather than assumed - but
+    # that is a positional accident, so this does not lean on it.
+    extra = {"epilog": omitted_epilog(omitted, sim_name)} if omitted else {}
     ap = argparse.ArgumentParser(
         prog=PROG, description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
+        formatter_class=argparse.RawDescriptionHelpFormatter, **extra)
     ap.add_argument("--sim", default=DEFAULT_SIM, choices=sorted(SIMS),
                     help="which sim's ingestion to use (default: %s)" % DEFAULT_SIM)
     sub = ap.add_subparsers(dest="command", metavar="<command>")
-    add_view(sub, sim)
-    add_analyse(sub, sim)
+    # Registration order is the order --help prints the commands in: view,
+    # analyse, report, pbs, then SIM_COMMANDS order. Preserved exactly.
+    if "view" not in skipped:
+        add_view(sub, sim)
+    add_analyse(sub, sim, sim_name)
     add_report(sub, sim)
-    add_pbs(sub, sim)
+    if "pbs" not in skipped:
+        add_pbs(sub, sim)
     add_sim_commands(sub, sim)
     return ap
 

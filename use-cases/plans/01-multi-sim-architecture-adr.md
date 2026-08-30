@@ -289,6 +289,33 @@ Next tightest is 1.10 (the Woodpecker crash, 21.1 vs 20.0); everything else is 1
 
 **⚠ Filename trap.** The pinned crash replay and the canary archive to names differing only in a 6-digit time field — `20260830-125608_Rustline_Race_nolap.xml` (pinned, 0 impacts) versus `20260830-122843_Rustline_Race_nolap.xml` (canary, 1 impact + 10 stalls). Misreading one for the other silently swaps the input and invalidates the comparison with no error. `COMMANDS.txt` carries a CAUTION block naming both; copy paths from that file rather than retyping.
 
+## 15b. The comparison is a FULL-TREE diff, not `analysis.json` field-for-field
+
+**Criterion 15's own wording — "the two `analysis.json` outputs are compared field for field" — is insufficient, and an identified bug walks straight through it.** Amended 2026-08-30 after QA demonstrated the gap.
+
+The entire viewer payload lives **only** in `report.html`. `analysis.json`'s `recordings` key holds just `{in, ids, titles}` — no geometry at all. In the canary's outputs, `dist0`, `target`, `startFrame`, `vref`, `propSize` and `colliders` each appear once in `report.html` and **zero times** in `analysis.json`. So any defect confined to the rendered report is invisible to the criterion as written. Two known candidates:
+
+- **A mis-bound `bounds_of`.** `report.py` defines a *local* `bounds_of(samples)` unrelated to the `geometry.bounds_of(points)` that moved in B3. A blind requalification in C repoints three call sites at the wrong function. It feeds the camera framing (`dist0`/`target`), so it changes `report.html` **only** — `analysis.json` is untouched, the static prefix scan does not see it (it is a Python-side wrong-function bind, not a module prefix in JS), and the behavioural probe probably passes too, since a badly-framed scene still draws plenty of colours.
+- **The JavaScript `qmul`/`qrot` corruption** (see below) — likewise `analysis.json`-invisible.
+
+**Therefore the A–E comparison is specified as a full-tree diff:** `analysis.json` **+ `report.md` + `report.html` + `flight.csv` + `assets/*.svg`**, for every replay. Exactly two differences are excused: the `generated` timestamp line, and the new top-level `capabilities` key. Everything else is a regression. This is what QA already measured the noise floor against, so it costs nothing extra — it just has to be *stated*, because the criterion's literal wording licenses a weaker check.
+
+### The JavaScript corruption check — built and proven, not planned
+
+QA built a faithful mutant of the trap the developer found in B3 (call sites rewritten to `geometry.qrot(...)`, `function qrot(...)` declarations left intact — which is precisely what a blind sweep produces) and measured what each check does with it:
+
+| check | mutant result |
+|---|---|
+| `analysis.json` vs baseline | **byte-identical** — criterion 15 sees nothing |
+| `node --check` on inline JS | **passes cleanly** — the syntax is valid |
+| HTML structure / refs | **passes** |
+| **Layer 1 — static prefix scan** | **CAUGHT** (6 hits, all `geometry.q`) |
+| **Layer 2 — behavioural probe** | **CAUGHT** — `ReferenceError: geometry is not defined`, thrown from `draw()` ← `resize()` ← `ResizeObserver` ← `fpvViewer` ← `open()` |
+
+**Layer 1** greps inside `<script>` blocks for any Python module prefix (`geometry`, `analysis`, `schema`, `props`, `tracks`, …). The naive form **false-positives on every replay with recordings**, because the viewer legitimately contains `it.props.map(i => FPV_REC.props[i])`; a negative lookbehind excluding `.`, identifier characters, `$` and quotes fixes it, since a bare module reference is never preceded by a dot. Calibrated against all four pre-migration reports: zero hits. Runs on every after-run, including the replays with no recordings.
+
+**Layer 2** opens each recording by a real click (`[data-rec="<id>"]`), via headless Chrome over the DevTools protocol with no third-party dependency, collecting `Runtime.exceptionThrown`, console errors and Log entries. Its second, independent assertion is sharper than "no error logged": the viewer draws into a **2D canvas** and `draw()` paints the background *first*, so a throw inside the geometry loop leaves a canvas of exactly **one distinct colour**. Colour count is therefore a direct liveness signal. Baseline references: Woodpecker 1 recording, 714×257, 629 colours; canary 11 recordings, 1,610–3,064 colours each, all opening without error; LiftoffArena's 2 to be captured at verification time. Both signals fired independently on the mutant.
+
 **Measured noise floor.** The same command run twice against unchanged code, into two different `-o` directories, differs **only** in `analysis.json`'s `generated` (second granularity) and the `report.md` / `report.html` footer timestamp (minute granularity). **Every SVG asset and `flight.csv` were byte-identical.** Anything else that differs is a regression.
 
 **Two corrections to §15's expectations:**

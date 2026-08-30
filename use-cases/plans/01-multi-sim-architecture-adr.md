@@ -413,6 +413,23 @@ Both check layers were proven on this shape as well: the same faithful mutation 
 
 **Baseline logistics.** The "before" run needs a checkout on `main`. Do **not** touch `C:\dev\liftoff-flight-analyzer`. Use `git clone <worktree> <temp>` then `git checkout main` there (`git worktree add` writes metadata into the original repo's `.git`, so it is not the right tool here). Store baseline outputs **outside** the worktree, or `reports/`'s ignore rule and the next run will eat them. Capture the baseline **first, before anything moves**.
 
+## 15e. Two rules this run produced, and the evidence for them
+
+A project with no test suite lives or dies on whether its checks are honest. Two rules emerged from actually building them, each from a failure rather than from principle. Both belong at the top of `COMMANDS.txt` (where they now are) and are direct input to the CONTRIBUTING guide.
+
+**Rule 1 — a check must distinguish "I looked and found nothing" from "there was nothing to look at."** Such a check is worse than no check, because it converts absence of evidence into evidence of absence, and it is believed. Four instances in this run:
+
+| what passed vacuously | what it would have let through | fix |
+|---|---|---|
+| viewer probe on a report with 0 recordings | recordings vanishing entirely from a report that should have them | pass the expected count; mismatch fails |
+| comparison harness never exercised | a harness that reports clean because it cannot see | dry-run against unchanged code, then seed defects |
+| viewer probe on the standalone page (no `[data-rec]`) | the JavaScript corruption on a whole artifact class | auto-detect the page shape |
+| `--declared` printing "not present in either tree" | reads as "the string is gone" when it means "no file differed" — and on byte-identical trees *every* label lands there | reworded to "not seen in any differing file" |
+
+**Rule 2 (corollary) — a check that has never been seen to FAIL proves nothing.** QA's first mutant renamed the JavaScript function *declarations* as well as the call sites; `node --check` caught that, and that version would have "proved" a probe that does not actually work. Only the faithful mutant — call sites alone, which is what a blind sweep really produces — demonstrated the gap. **Before trusting a green result, mutate something and watch the check go red.**
+
+The two are siblings: one is about a check with no input, the other about a check with no proof. Both produce the same false confidence, and in a project that has chosen to have no test suite, false confidence in a check is the most expensive thing available.
+
 ## 16. Risks carried into implementation
 
 1. **The invocation decision is the one that can break the product silently.** Verified empirically on Windows/PowerShell/junction on Python 3.14; QA's criterion-7 check from a fresh clone in two shells is the real gate. Fallback: `src\fpv.py` launcher.

@@ -56,7 +56,7 @@ All paths relative to the worktree root `C:\dev\liftoff-flight-analyzer-uc-01-mu
 | `liftoff_props.py` | `sources\liftoff\props.py` (moves whole) |
 | `liftoff_view.py` | `common\incident_view.py` (`impacts`, `window_indices`, `build`, `page`, `VIEWER_JS`, `PAGE`) — **split**: `props_near` → `sources\liftoff\map_geometry_generator.py`; `IMPACT_DROP_KMH`, impact debounce, `PROP_NOMINAL` → `sources\liftoff\calibration.py`; `main()` → `cli.py` |
 | `analyze_flight.py` | `common\analysis.py` — **split**: the ~18 threshold default *values* → `sources\liftoff\calibration.py` |
-| `fpv_report.py` | `common\report.py` — **split**: `main()` + argparse → `cli.py`; `pb_context` (`:840`) → `common\pbs.py` |
+| `fpv_report.py` | `common\report.py` — **split**: `main()` + argparse → `cli.py`; `pb_context` (`:840`) → `common\pbs.py`; **`geometry_for` → `sources\liftoff\map_geometry_generator.py`** (added 2026-08-30 during B6 — it calls `LT.for_replay`, so leaving it in `common/` would fail criterion 10; the ADR's table must carry this row) |
 | `liftoff_pbs.py` | `sources\liftoff\pbs.py` (`DEFAULT_ROOT`, `track_names`, `parse_times`, `snapshot`) — **split**: `fmt`, `diff_line`, history load/append → `common\pbs.py` |
 | `liftoff_telemetry.py` | `sources\liftoff\telemetry.py` (moves whole) |
 

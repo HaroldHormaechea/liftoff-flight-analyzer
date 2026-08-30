@@ -1,4 +1,11 @@
-# Use Case 02: Write the contributor guide for the new extension points
+# Use Case 02: Write the contributor guide, and fix what writing it exposed
+
+> **Scope widened by the author, 2026-08-30, after the analyst's first pass.**
+> This use case was documentation-only. Writing the guide exposed two code
+> defects and two places where ADR-0001 promises more than the code delivers, so
+> the fixes are now **in scope and land in the same run** — a guide that documents
+> a contract the code does not honour would be false on the day it shipped.
+> Criterion 13 is replaced accordingly, and criteria 14–19 are added.
 
 ## Summary
 
@@ -67,7 +74,111 @@ the approved vocabulary is published only in the licensed specification.
     against.
 12. The guide does not duplicate `README.md` or `SKILL.md`. Where those already
     answer a question, it links instead of repeating.
-13. No source code changes. This use case produces documentation only.
+13. **(Replaced.)** Source changes are now in scope, limited to the defects and
+    reconciliations named in criteria 14–18. No unrelated refactoring.
+
+14. **`cmd_view` uses the selected sim.** `src/fpv_review/cli.py` calls
+    `tracks.for_replay(...)` and `scene.load_scene(...)` on the module-level
+    Liftoff imports rather than through `sim[...]`, unlike every other command.
+    Latent while one sim exists; `view --sim <other>` would silently use Liftoff's
+    readers on another sim's data. Fixed to match the pattern the other commands
+    already use.
+
+15. **The declared per-sim surface is complete.** `src/fpv_review/sources/__init__.py`
+    lists the modules a sim package must provide but omits `capabilities.py`,
+    which ADR decision 4 requires and `cli.py` calls. Added.
+
+16. **The ADR's per-sim contract matches what registration actually requires.**
+    ADR-0001 names four modules; `cli.py` registers a sim as a ten-key dictionary,
+    so a package that conforms to the documented contract does **not** currently
+    wire up. Reconcile the two — by correcting the ADR to describe what
+    registration really needs, by making registration accept a contract-conformant
+    package, or by stating the gap explicitly as work the second sim will force.
+    Whichever is chosen, the ADR and the code must agree when this lands, and the
+    reasoning goes in the ADR.
+
+17. **The capabilities mechanism is described as it actually behaves.**
+    `capabilities.gap()` and `.has()` have no call site: only `declare()` and
+    `as_json()` are called. This is correct for Liftoff, which declares no gap that
+    suppresses a finding — but the ADR reads as though the naming rule operates
+    today. Say plainly that the declaration is recorded and published, and that the
+    consuming half is provided for a sim that needs it and is currently unexercised.
+    Do not describe unexercised machinery as running.
+
+18. **Nothing in criteria 14–17 changes the tool's output.** The existing four
+    saved replays must produce byte-identical `analysis.json`, `report.md`,
+    `report.html`, `flight.csv` and SVG assets, apart from timestamps. These are
+    corrections to wiring and documentation, not to behaviour.
+
+18a. **The comparison must exercise the changed code, and the report artifacts do
+    not.** *(Added 2026-08-30 — the challenger found this hole in 18 as first
+    written.)* The two calls criterion 14 fixes, `tracks.for_replay` and
+    `scene.load_scene`, exist **only in `cmd_view`**. `cmd_report` never calls
+    either; it reaches geometry through `sim["map"].geometry_for`. So a before/after
+    diff of `analysis.json`, `report.md`, `report.html`, `flight.csv` and the SVGs
+    executes **zero lines** of the code criterion 14 changes — the only real
+    behavioural change in the run would ship verified by nothing but a reading.
+
+    **Therefore the `view` subcommand must be compared too**: run `view` before and
+    after against the same archived replay and compare the pages with `cmp`.
+    `incident_view.page()` embeds **no timestamp** — the only two timestamp sites in
+    the tree are `report.py:1271` and `cli.py:446` — so these pages compare
+    byte-for-byte with **nothing to excuse**, which makes this the strictest check
+    available in the run. This is the same standalone artifact UC-01 discovered its
+    probe had been passing over vacuously; it is the third time this artifact has
+    turned out to be the one that matters.
+
+    **18a covers three replays by page comparison, and the fourth by its refusal
+    — deliberately.** `TheRussianWoodpecker`'s scene is not in the cache, so `view`
+    on it exits 1 with "no cached scene". **Do not build that cache.** Building it
+    would gain a fourth byte-comparison and lose the only coverage of two behaviours
+    worth more than it: `view`'s **refusal contract** (exit 1, no file written, and a
+    printed command that runs — UC-01 recorded this as a deliberate asymmetry against
+    `report`, which degrades instead) and the degraded-geometry path in `report`.
+    So: **compare pages byte-for-byte on the three cached replays, and assert on the
+    fourth that `view` still exits 1, writes no file, and prints a runnable command.**
+    Four replays, two kinds of check, nothing silently dropped. Verified by the
+    challenger against unchanged code: the three cached pages are byte-identical
+    across runs (222,363 / 187,422 / 288,951 bytes), so `cmp` is a true
+    zero-tolerance instrument here rather than an assumed one.
+
+    Run material is prepared at `C:\dev\liftoff-uc02-run\`: `trackdata/` (187
+    entries with `index.json`, `props.json` and `scenes/`), `data/liftoff_history.json`,
+    and `replays/` holding the same four archived replays UC-01 used —
+    `20260829-205847_LiftoffArena_Race_3lap.xml`,
+    `20260830-122843_Rustline_Race_nolap.xml`,
+    `20260830-125608_Rustline_Race_nolap.xml`,
+    `20260830-183818_TheRussianWoodpecker_Race_1lap.xml`. Geometry is exercised
+    rather than degraded. **Run every comparison with `cwd` set to that directory**,
+    never from the worktree, and pass archived paths explicitly — never `--latest`,
+    which re-archives and re-picks. `use-cases/plans/01-multi-sim-architecture-adr.md`
+    § 15a records the traps, each of which produced a confidently wrong result once.
+
+20. **`view` degrades rather than crashing when there is no track data at all.**
+    *(Added 2026-08-30 — third defect, found by the challenger while calibrating 18a.)*
+    With no `trackdata/index.json`, `cmd_view` raises an unhandled `FileNotFoundError`
+    out of `tracks.load_index` (`sources/liftoff/tracks.py:408`) and prints a raw
+    traceback at exit 1. The `track is None` guard at `cli.py:101` is unreachable,
+    because `for_replay` dies before returning. `cmd_report` in the identical
+    situation degrades cleanly at exit 0.
+
+    **This is in scope because the guide creates the situation.** Criterion 19 tells
+    a contributor that a saved replay is enough to get started; the first thing such
+    a reader has — a replay and no cache — is exactly the input that produces a
+    traceback. Fix `view` to fail the way the rest of the tool fails: a stated reason
+    and a runnable command, not a stack trace. The existing refusal for an uncached
+    *scene* is the model to match. This does not change the refusal contract in 18a,
+    which concerns a cached index and a missing scene — a different and already
+    well-behaved case.
+
+19. **The guide states the Liftoff requirement up front.** A contributor needs a
+    Liftoff install and their own saved replay to verify any change, because
+    `flight.csv` is gitignored, no fixture is committed, and the example report
+    cannot be regenerated from what the repository contains. State this as a
+    prerequisite **early**, where a reader meets it before investing effort — not
+    buried in a verification section — and say that **worked examples appear later
+    in the guide**, so a reader knows the concrete material is coming rather than
+    absent.
 
 ## Potential Pitfalls & Open Questions
 
@@ -86,6 +197,33 @@ the approved vocabulary is published only in the licensed specification.
   has thresholds.
 - **Assumption** — Issue templates, a code of conduct and PR conventions are out
   of scope. The user chose the focused guide; these can follow separately.
+- **Risk (added with the widened scope)** — Criterion 16 admits three different
+  resolutions, and the cheapest (correct the ADR) is not obviously the best: it
+  documents a registration shape nobody designed, whereas making registration
+  accept a contract-conformant package is the change that would actually make the
+  contract true. Weigh both; do not default to the cheaper one because it is
+  smaller. Whatever is chosen must leave the ADR and the code in agreement.
+- **Settled empirically, 2026-08-30** — the narrowed precondition is true of one
+  command and false of another, so the guide must not generalise it. From a
+  directory holding nothing but a replay XML, `report` **exits 0** and produces a
+  full report, printing "no track data for this replay — the path, the attitude and
+  the impacts are drawn, the environment is not". `view` **cannot run at all**
+  without track data, and neither can `tracks --check`. So the honest relief is
+  narrower than "you need only a replay file": a saved replay can be **analysed**
+  without the game; it cannot be **viewed**. Since 18a makes `view` the strictest
+  check in the run, a guide claiming a replay file suffices would be wrong about the
+  very command the verification story depends on. State the Liftoff requirement up
+  front per criterion 19, then this narrower fact as the relief it is.
+- **Risk (added)** — The code fixes are small and their verification is not: the
+  whole point of criterion 18 is that output must not move. The migration's
+  baseline apparatus was deleted after UC-01 merged, so this run must re-establish
+  a before/after comparison from `main` rather than assume one exists.
+- **Edge case (added)** — Criterion 14's defect is unreachable by any test that
+  runs today, because only one sim exists: with one entry in `SIMS`, routing through
+  `sim[...]` and reaching for the module directly select the same object. It is
+  verified by reading, by confirming the call routes through `sim[...]`, and — per
+  18a — by confirming the `view` output is unchanged, which proves the correction
+  broke nothing even though it cannot prove the bug is gone.
 - **Assumption** — The two verification rules this project produced ("a check must
   distinguish 'I looked and found nothing' from 'there was nothing to look at'",
   and "a check nobody has watched fail proves nothing") are deliberately **not**
@@ -130,3 +268,9 @@ the approved vocabulary is published only in the licensed specification.
   placeholder, so this is an edit rather than a new file.
   A: Confirmed by inspection — commit `3b69f5a`, one line, naming the
   rearchitecture that has now merged as its own precondition.
+
+- Q: (After the analyst's first pass) Writing the guide exposed two code defects
+  and two ADR overstatements. Fix them here, or defer to a separate use case?
+  A: Fix them in this run. The author also asked that the guide state the Liftoff
+  install requirement early, and note that worked examples appear later in the
+  guide. The run proceeds autonomously — no plan-approval gate for this use case.

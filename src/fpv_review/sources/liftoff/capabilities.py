@@ -9,7 +9,11 @@ analysis's point of view those fields do not exist.
 
 Written as a declaration rather than discovered at runtime, so a stage can ask
 before it computes rather than producing a confident number from a field that
-was never there.
+was never there. No stage asks today. This declaration is recorded and published
+into analysis.json on every report, and nothing consults it, because none of the
+gaps below suppresses a finding the report makes: the three UNAVAILABLE fields
+are live-telemetry ones the analysis never reads. See common/capabilities.py for
+the consuming half, which is provided for a sim that needs it.
 """
 
 from fpv_review.common import capabilities as caps

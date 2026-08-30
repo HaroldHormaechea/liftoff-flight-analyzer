@@ -98,6 +98,59 @@ A sim is added by writing `sources/<sim>/` with `source.py` (emit the schema),
 (what it cannot supply), then registering it in `cli.py`. The analysis is not
 touched.
 
+**Those four modules are the contract, and registration honours it.** `cli.py`
+registers a sim as a dictionary of module keys. Four are required —
+`calibration`, `capabilities`, `source` and `map` — and a package holding only
+those registers successfully and offers `analyse` and `report`. The other six
+keys — `replay`, `pbs`, `tracks`, `scene`, `props` and `telemetry` — are per-sim
+extras. Each enables named commands, each is optional, and `--help` lists every
+command left out beside the module file that would add it.
+
+Every key names the module file of the same name — `replay` is `replay.py`,
+`pbs` is `pbs.py` — with one exception. `map` is `map_geometry_generator.py`,
+because the map is assembled from tracks, scene and props rather than being any
+one of them.
+
+Before this amendment (use case 02) that was not true. A package conforming to
+the contract above raised `KeyError('replay')` while the parser was still being
+built, because `add_report` read `sim["replay"].DEFAULT_ROOT` for the `--root`
+default unconditionally. The documented contract could not be implemented.
+
+**Beat, and it was the cheaper option:** amending this decision to describe the
+ten-key registration the code actually required. Rejected. It would have
+published a registration shape nobody designed — ten mandatory modules, six of
+them irrelevant to a sim that only wants its flights analysed — and it would
+have left the contract untrue rather than making it true. The gap was in the
+code, so the code moved.
+
+**The function surface, so a contributor does not have to read `cli.py` to find
+it.** Signatures as defined, not as called:
+
+| module | function | returns |
+|---|---|---|
+| `source.py` | `load_flight(path)` | `(SessionMeta, FlightSeries, LapSet, meta)` — four values. `meta` is the sim's raw metadata dict, published verbatim as `analysis.json`'s `meta` key |
+| `map_geometry_generator.py` | `props_near(track_dir, track_meta, route, points, radius, shapes=None)` | a list of item dicts (`p`, `yaw`, `n`, `k`, `ap`, `sh`), one per track item within `radius` of the path |
+| `map_geometry_generator.py` | `geometry_for(replay, track_dir, scenes_dir, props_path)` | `(track, race, scene, shapes, note)`. A missing cache is never fatal here: it degrades and reports through `note`, the sentence naming what could not be drawn, which is empty only when nothing is missing |
+| `calibration.py` | — | six module-level names, no functions; see decision 7 |
+| `capabilities.py` | `declare()` | a `common/capabilities.py` `Capabilities` |
+
+Two more functions became contractual in the same use case, when `cmd_view` was
+corrected to reach them through the selected sim rather than through Liftoff's
+modules directly:
+
+| module | function | returns |
+|---|---|---|
+| `tracks.py` | `for_replay(out_dir, replay)` | `(track, race, track_id, race_id)`. Either dict is `None` for a track the index does not hold |
+| `scene.py` | `load_scene(out_dir, environment)` | the cached scene dict (`colliders`, `skipped`, …). It refuses with a runnable `scene` command when that environment is not cached |
+
+Both serve `view`, so they are required only of a sim that supplies `tracks.py`
+and `scene.py`. They are not part of the four-module contract.
+
+These signatures are checked by first use, not at registration. Registration
+validates the module **keys**; the functions behind them are the contract this
+decision states, and duplicating them in a runtime check would put the same
+contract in two places.
+
 **Beat:** empty `velocidrone/` and `uncrashed/` stub folders. Git does not track
 empty directories, and stubs for sims whose data nobody has inspected are
 precisely the speculative generalisation the brief rules out.
@@ -151,6 +204,20 @@ against the Rustline 2-lap race of 2026-08-26), `IMPACT_DROP_KMH`, the impact
 debounce, `PROP_NOMINAL`, and the two track-scale distances `REC_RADIUS_M` and
 `CAM_SPAN_M`. `common/analysis.build_parser(calibration)` receives them and
 hardcodes none.
+
+**The six module-level names, exactly as registration checks for them:**
+`THRESHOLDS`, `IMPACT_DROP_KMH`, `IMPACT_DEBOUNCE_SAMPLES`, `PROP_NOMINAL`,
+`REC_RADIUS_M` and `CAM_SPAN_M`. `cli.py` checks all six before it builds the
+parser and refuses by name, naming the missing constant and the sim's own
+`calibration.py`, rather than failing later inside a command.
+
+The 20 `THRESHOLDS` keys are **not** listed a second time and are **not**
+checked separately. `common/analysis.build_parser(calibration)` reads every one
+of them to build the `analyse` parser, and `cli.py` calls it while registering
+that subcommand — so a missing key is reached at registration by construction,
+and is refused there by name. The keys stay encoded in the one module that has
+always held them. A second list would be exactly the drift this decision exists
+to prevent.
 
 **The line, so a later reader can place a new constant: physical constants are
 calibration; presentational ones are not.** A speed in km/h, a distance in
@@ -269,12 +336,22 @@ readable, diffable interchange artifact, full precision there was explicitly
 declined, and it was verified byte-identical across the removal. Only the
 in-memory analysis path went to full precision.
 
-**Degradation stays explicit.** A sim declares what it cannot supply
-(`capabilities.py`), the declaration is written into `analysis.json` as one
-additive top-level key, and a stage that meets a declared gap names it rather
-than inferring a value. For Liftoff this changes nothing in `report.md` or
-`report.html`, because Liftoff declares no gap that suppresses a finding the
-report currently makes.
+**Degradation is declared and published; the consuming half is provided and not
+yet called.** A sim declares what it cannot supply (`capabilities.py`), and
+`cli.py` writes that declaration into `analysis.json` as one additive top-level
+key on every report. That half runs on every run.
+
+The other half does not. `common/capabilities.py` provides `gap()` and `has()`
+so that a stage meeting a declared gap can name it rather than infer a value,
+and nothing calls either function today. That is correct rather than
+unfinished: Liftoff declares no gap that suppresses a finding the report makes,
+so no stage has anything to consult, and `gaps_named_in_this_run` is `[]` in
+every report this repository has produced. The rule — name a declared gap,
+never infer past it — is the standard this project holds itself to, and the
+machinery for it is in place, waiting for the first sim that needs it. Read it
+as provided, not as running.
+
+For Liftoff this changes nothing in `report.md` or `report.html`.
 
 **`analyze_flight.py` was already standard-library-only with no Liftoff import at
 any line**, so criterion 10 was achievable rather than aspirational. The analysis

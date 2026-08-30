@@ -65,7 +65,10 @@ identical afterwards, proven against a saved replay.
     successor is updated and verified to run as printed.
 15. A saved replay is processed end to end before and after the migration, and
     the two `analysis.json` outputs are compared field for field. Any difference
-    is explained, not waved through.
+    is explained, not waved through. **QA owns this check**, and the material
+    exists — see *Verification material* below. Run it on at least the newest
+    replay and on the crash replay, since the latter is the only one that
+    exercises the scene, prop and incident-recording path.
 16. The committed report under `examples/` is byte-identical afterwards, unless a
     difference is explained and accepted.
 17. No third-party runtime dependency is introduced.
@@ -107,6 +110,27 @@ identical afterwards, proven against a saved replay.
   directories are speculative and git does not track them.
 - **Assumption** — `scripts/` disappears entirely, and the content of
   `scripts/README.md` moves into the ADR or a docs successor.
+
+## Verification material
+
+Replays live at
+`%LOCALAPPDATA%\..\LocalLow\LuGus Studios\Liftoff\Recordings\Race\`
+(`liftoff_replay.py --list` prints them newest first, and `--latest` picks the
+top one). Confirmed present on this machine on 2026-08-30, 15+ files across
+several tracks. The two that matter for this migration:
+
+- **Newest** — `01 - Over The Horizon - 01_31_727 - 2026-08-30.xml`. The default
+  `--latest` target; a clean completed race, so the whole ordinary path runs.
+- **Crash** — `03 - Pipeline - 00_00_000 - 2026-08-30 - crash on 3rd.xml`. The
+  only kind of replay that drives the scene geometry, prop collider and 3D
+  incident-recording code, which is the part of the tree with the most
+  relocation risk. A migration verified only on a clean flight has not been
+  verified.
+
+Method: run the full pipeline on **both**, on `main` before the migration,
+keeping each `analysis.json`; run it again after, and diff field for field. The
+generated `report.html` should also be opened once for each, because a broken
+template or asset path produces a valid `analysis.json` and an unreadable page.
 
 ## Original Description
 
@@ -159,4 +183,6 @@ Or something similar. Feel free to advise
 - Q: With no test suite, verification means running a real replay before and
   after. What is available?
   A: Replays are already saved, so a genuine before/after `analysis.json`
-  comparison is possible (criterion 15).
+  comparison is possible (criterion 15). The author asked that QA locate the
+  latest recording and test against it when the work is done; the specific files
+  are pinned under *Verification material*.

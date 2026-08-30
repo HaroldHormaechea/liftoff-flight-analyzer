@@ -30,6 +30,9 @@ vcs:
   already_initialized: true
   default_branch: "main"
   remote: "https://github.com/HaroldHormaechea/liftoff-flight-analyzer.git"
+use_cases:
+  index: USE_CASES.md
+  folder: use-cases/
 ---
 
 # Project Brief
@@ -647,6 +650,11 @@ logging framework, metrics or tracing, and none warranted. The relevant
 observability is in the output artifacts: `analysis.json` carries the thresholds
 that produced each number and a `not_in_report` list, and a degraded recording
 prints what geometry was missing in its own footer.
+
+## Use Cases
+
+Use cases are captured individually under `use-cases/` and indexed in
+`USE_CASES.md`.
 
 ## Profiles
 

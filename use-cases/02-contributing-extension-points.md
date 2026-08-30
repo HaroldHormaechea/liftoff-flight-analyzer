@@ -1,4 +1,11 @@
-# Use Case 02: Write the contributor guide for the new extension points
+# Use Case 02: Write the contributor guide, and fix what writing it exposed
+
+> **Scope widened by the author, 2026-08-30, after the analyst's first pass.**
+> This use case was documentation-only. Writing the guide exposed two code
+> defects and two places where ADR-0001 promises more than the code delivers, so
+> the fixes are now **in scope and land in the same run** — a guide that documents
+> a contract the code does not honour would be false on the day it shipped.
+> Criterion 13 is replaced accordingly, and criteria 14–19 are added.
 
 ## Summary
 
@@ -67,7 +74,50 @@ the approved vocabulary is published only in the licensed specification.
     against.
 12. The guide does not duplicate `README.md` or `SKILL.md`. Where those already
     answer a question, it links instead of repeating.
-13. No source code changes. This use case produces documentation only.
+13. **(Replaced.)** Source changes are now in scope, limited to the defects and
+    reconciliations named in criteria 14–18. No unrelated refactoring.
+
+14. **`cmd_view` uses the selected sim.** `src/fpv_review/cli.py` calls
+    `tracks.for_replay(...)` and `scene.load_scene(...)` on the module-level
+    Liftoff imports rather than through `sim[...]`, unlike every other command.
+    Latent while one sim exists; `view --sim <other>` would silently use Liftoff's
+    readers on another sim's data. Fixed to match the pattern the other commands
+    already use.
+
+15. **The declared per-sim surface is complete.** `src/fpv_review/sources/__init__.py`
+    lists the modules a sim package must provide but omits `capabilities.py`,
+    which ADR decision 4 requires and `cli.py` calls. Added.
+
+16. **The ADR's per-sim contract matches what registration actually requires.**
+    ADR-0001 names four modules; `cli.py` registers a sim as a ten-key dictionary,
+    so a package that conforms to the documented contract does **not** currently
+    wire up. Reconcile the two — by correcting the ADR to describe what
+    registration really needs, by making registration accept a contract-conformant
+    package, or by stating the gap explicitly as work the second sim will force.
+    Whichever is chosen, the ADR and the code must agree when this lands, and the
+    reasoning goes in the ADR.
+
+17. **The capabilities mechanism is described as it actually behaves.**
+    `capabilities.gap()` and `.has()` have no call site: only `declare()` and
+    `as_json()` are called. This is correct for Liftoff, which declares no gap that
+    suppresses a finding — but the ADR reads as though the naming rule operates
+    today. Say plainly that the declaration is recorded and published, and that the
+    consuming half is provided for a sim that needs it and is currently unexercised.
+    Do not describe unexercised machinery as running.
+
+18. **Nothing in criteria 14–17 changes the tool's output.** The existing four
+    saved replays must produce byte-identical `analysis.json`, `report.md`,
+    `report.html`, `flight.csv` and SVG assets, apart from timestamps. These are
+    corrections to wiring and documentation, not to behaviour.
+
+19. **The guide states the Liftoff requirement up front.** A contributor needs a
+    Liftoff install and their own saved replay to verify any change, because
+    `flight.csv` is gitignored, no fixture is committed, and the example report
+    cannot be regenerated from what the repository contains. State this as a
+    prerequisite **early**, where a reader meets it before investing effort — not
+    buried in a verification section — and say that **worked examples appear later
+    in the guide**, so a reader knows the concrete material is coming rather than
+    absent.
 
 ## Potential Pitfalls & Open Questions
 
@@ -86,6 +136,20 @@ the approved vocabulary is published only in the licensed specification.
   has thresholds.
 - **Assumption** — Issue templates, a code of conduct and PR conventions are out
   of scope. The user chose the focused guide; these can follow separately.
+- **Risk (added with the widened scope)** — Criterion 16 admits three different
+  resolutions, and the cheapest (correct the ADR) is not obviously the best: it
+  documents a registration shape nobody designed, whereas making registration
+  accept a contract-conformant package is the change that would actually make the
+  contract true. Weigh both; do not default to the cheaper one because it is
+  smaller. Whatever is chosen must leave the ADR and the code in agreement.
+- **Risk (added)** — The code fixes are small and their verification is not: the
+  whole point of criterion 18 is that output must not move. The migration's
+  baseline apparatus was deleted after UC-01 merged, so this run must re-establish
+  a before/after comparison from `main` rather than assume one exists.
+- **Edge case (added)** — Criterion 14's defect is unreachable by any test that
+  runs today, because only one sim exists. It can be verified by reading and by
+  confirming the call now routes through `sim[...]`, not by observing different
+  behaviour.
 - **Assumption** — The two verification rules this project produced ("a check must
   distinguish 'I looked and found nothing' from 'there was nothing to look at'",
   and "a check nobody has watched fail proves nothing") are deliberately **not**
@@ -130,3 +194,9 @@ the approved vocabulary is published only in the licensed specification.
   placeholder, so this is an edit rather than a new file.
   A: Confirmed by inspection — commit `3b69f5a`, one line, naming the
   rearchitecture that has now merged as its own precondition.
+
+- Q: (After the analyst's first pass) Writing the guide exposed two code defects
+  and two ADR overstatements. Fix them here, or defer to a separate use case?
+  A: Fix them in this run. The author also asked that the guide state the Liftoff
+  install requirement early, and note that worked examples appear later in the
+  guide. The run proceeds autonomously — no plan-approval gate for this use case.

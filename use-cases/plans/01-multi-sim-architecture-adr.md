@@ -74,6 +74,12 @@ New with no predecessor: `common\schema.py`, `common\capabilities.py`, `sources\
 
 `common/schema.py` owns `FlightSample`, `FlightSeries`, and **the CSV serialisation of them**. `COLUMNS` moves out of `sources/liftoff/replay.py` into `common/schema.py`, where it is no longer Liftoff's record layout but the serialisation of `FlightSample` — which is what makes it a contract a second sim can read.
 
+**`load_flight` returns a 4-tuple, not the 3 named above** (recorded during D): `(SessionMeta, FlightSeries, LapSet, meta)`. The raw `meta` dict still travels because `report.py` writes it verbatim into `analysis.json`'s `meta` key and `race_name(meta)` reads it — reshaping it would change the **published record**, which criterion 15 would correctly flag. `SessionMeta` is the typed view of the same data and `LapSet` drives the lap-range computation, so both have real consumers. **The ADR must record the 4-tuple**, and `source.py`'s own docstring must describe it — it is the first thing a second-sim implementer reads.
+
+**One genuine behaviour change, on the dormant telemetry path only:** for a CSV lacking `vel_*` columns (a `liftoff_telemetry.py` capture), velocity is derived in `read_csv` and then quantised by `analysis.load`, where before it was derived unrounded. No verification replay reaches it, and **F removes the quantisation**, after which that path matches today exactly. `read_csv` deliberately stays tolerant of missing columns: a strict 17-column reader would silently break `analyse` on telemetry captures, which is documented behaviour exercised by no replay in the set.
+
+**`FlightSeries.sample_dt` is declared but not populated as of D.** `analysis.sample_dt(data)` remains the authority. Unifying them would move where the measured median comes from — a behaviour change in the commit that must stay readable — so it is deferred. In E it must either be populated from the *existing* implementation (plumbing only, one function and two callers, nothing consuming it yet) **or** documented in the field comment and the ADR as a declared part of the contract that Liftoff measures downstream. An undocumented `None` is a trap for the one person the contract exists for.
+
 | stage | today | after |
 |---|---|---|
 | construct | `LR.parse` → list of float lists (`fpv_report.py:1938`) | `source.load_flight(path)` → `(SessionMeta, FlightSeries, LapSet)` |
@@ -107,7 +113,13 @@ The pipeline currently runs at **two precisions simultaneously**: `fpv_report.py
 
 Doing it inside the migration would make the one thing the migration must prove — that nothing changed — untrue for reasons no reviewer could separate from a real regression.
 
-**The quantisation is temporary, and it is removed in this run (author's decision, 2026-08-30).** It exists for commits A–E only. **Commit F** deletes it, and that commit's entire diff *is* the precision change: one line in `common/analysis.load()`, nothing else. QA then runs the criterion-15 comparison a **second** time (§15) so every resulting delta is attributable to that single line and to nothing in the migration.
+**The quantisation is temporary, and it is removed in this run (author's decision, 2026-08-30).** It exists for commits A–E only. **Commit F** deletes it, and that commit's entire diff *is* the precision change.
+
+**Corrected 2026-08-30 during D: the parity measure lives in TWO sites, not one.**
+1. `common/analysis.load()` — the contiguous block quantising each field on read.
+2. `common/report.py`'s `load_samples()` — the nose bearing's `round(v, 6)` on the attitude quaternion. It **must** be quantised for A–E, because the code it replaces opened `flight.csv` a second time and therefore computed the nose from the 6-decimal values. This is exactly why D's nose comparison came out bit-identical.
+
+**F removes both**, and afterwards the whole pipeline is at full precision. Any description of F as a one-line change is wrong. QA then runs the criterion-15 comparison a **second** time (§15) so every resulting delta is attributable to that single line and to nothing in the migration.
 
 Two things about commit F that must not be got wrong:
 
@@ -203,7 +215,7 @@ The use case's own risk list says correctness rests entirely on criterion 15 and
 - **C** — import rewrites across the tree. Mechanical and uniform.
 - **D** — the boundary rewrite: `analysis.load()` taking `FlightSeries`, the positional-index sites, `path_window`, the precision quantisation. **The only commit containing behaviour-bearing edits, and the one a reviewer must read line by line.**
 - **E** — new files (schema, capabilities, calibration, cli, `__main__`, pyproject, ADR, docs); delete `scripts\`.
-- **F** — **remove the precision-parity quantisation** from `common/analysis.load()`, and delete the comment that guarded it. One line of behaviour change, no other edit permitted in this commit. Lands only after QA has verified A–E clean; if A–E do not verify, F does not happen and the run stops at E for the user to decide.
+- **F** — **remove the precision-parity quantisation from BOTH sites**: the block in `common/analysis.load()` and the nose-bearing `round(v, 6)` in `common/report.py`'s `load_samples()`. Delete the comments that guarded them. Behaviour change only — no other edit permitted in this commit. Lands only after QA has verified A–E clean; if A–E do not verify, F does not happen and the run stops at E for the user to decide.
 
 Delete `scripts\__pycache__\` explicitly before the first run — stale `.pyc` from the flat layout can mask an import error.
 

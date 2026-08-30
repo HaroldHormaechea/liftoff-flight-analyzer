@@ -335,6 +335,23 @@ The *ordering* is itself a check: LiftoffArena's `crash-1` has the richest scene
 
 **Both checks are durable artifacts beside the baseline**, not session-scoped snippets: `C:\dev\liftoff-uc01-baseline\check-script-prefixes.py` (layer 1) and `C:\dev\liftoff-uc01-baseline\viewer-probe.mjs` (layer 2, usage `<report.html> <port> <expected-count>`). Each carries a comment block explaining what it catches and why the obvious simpler version fails. `COMMANDS.txt` holds the full verification contract — both invocations, the colour table, the expected-count rule, the comparison scope, and an explicit note that **neither layer catches a mis-bound `bounds_of`**, with what does.
 
+### 15c. The comparison harness, calibrated against a known-clean run
+
+`C:\dev\liftoff-uc01-baseline\compare-tree.py` performs the full-tree diff. It was **dry-run against the unchanged `main` clone** — all four replays, canonical commands, `-o reports-dryrun` — and came back clean on every axis: full-tree diff, layer 1, layer 2, and **every viewer colour count reproducing exactly**. So the instrument is calibrated: a difference reported after the migration is a real difference, not harness noise.
+
+It was then **broken on purpose**. Seven defects were seeded into a copy of the clean run and all seven were caught and named: a 7th-significant-digit float (the commit-F shape), a stall verdict flip, an added top-level key, an SVG attribute change, a `dist0` change buried at column 534,856 of a 1 MB line in `report.html` (the `bounds_of` shape), a deleted asset, and a line-endings-only change.
+
+**Three harness defects that exercise exposed — each would have corrupted a real verdict:**
+
+1. **Line-ending blindness, and it is a live migration risk rather than a toy.** `splitlines()` normalises newlines away, so a file differing *only* in line endings was reported as different and then described as "0 differing lines". Worse: `flight.csv` is written by `csv.writer`, whose terminator is already `\r\n` (2,820 CRs in the Woodpecker file), so a writer that **loses `newline=""`** emits `\r\r\n` — which `splitlines()` reads as thousands of phantom blank lines. **The file writers move in commits B–D**, and `common/schema.py` takes over serialising `flight.csv` in D, so this is a real possibility on this run. The harness now strips every CR and reports `LINE ENDINGS changed only (CR count X → Y, content identical) — check for a lost newline="" on the writer`. **`flight.csv` is CRLF today and must stay CRLF** — the plan's own "byte-identical across E and F" condition depends on it.
+2. **Useless excerpts on long lines.** `report.html` carries the whole viewer payload on one ~1 MB line, so a 160-character excerpt showed two identical-looking strings. It now windows on the first differing *column*, which is the only reason the `dist0` mutation was legible.
+3. **Inflated counts.** Detail lines were counted as separate problems, overstating the damage.
+
+**Two hedges that measurement removed:**
+
+- **Colour counts reproduce exactly** for identical code and identical geometry. The earlier caveat ("the signal is 1 or a large collapse, not a small drift") therefore applies **only to the E-vs-F pass**, where geometry may legitimately shift. For **A–E, any change in a colour count is investigable.** That is a materially sharper check than first specified.
+- **`--allow-capabilities` excuses the new top-level key for A–E only.** It must **not** be passed for the E-vs-F pass: both sides have the key by then, so any difference there is real.
+
 **Measured noise floor.** The same command run twice against unchanged code, into two different `-o` directories, differs **only** in `analysis.json`'s `generated` (second granularity) and the `report.md` / `report.html` footer timestamp (minute granularity). **Every SVG asset and `flight.csv` were byte-identical.** Anything else that differs is a regression.
 
 **Two corrections to §15's expectations:**

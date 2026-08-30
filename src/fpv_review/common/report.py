@@ -61,14 +61,12 @@ refresh that tab. A batch run wants the flag too. --no-open is the older
 spelling and still works.
 """
 
-import argparse
 import csv
 import json
 import math
 import os
 import re
 import sys
-import webbrowser
 from datetime import datetime
 from pathlib import Path
 
@@ -837,31 +835,6 @@ def write(path, text):
         fh.write(text)
 
 
-def pb_context(meta, history_path):
-    """Best race and best lap for this track, from the PB snapshots.
-
-    Liftoff overwrites its own PB files, so a snapshot history is the only place
-    a superseded time still exists. It is what makes "faster or slower than
-    usual" answerable at all."""
-    p = Path(history_path)
-    if not p.exists():
-        return {}
-    try:
-        hist = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    if not hist:
-        return {}
-    last = hist[-1]
-    out = {"taken_at": last.get("taken_at")}
-    for key, field in (("races", "race"), ("laps", "lap")):
-        for guid in (meta.get("race_id"), meta.get("track_id")):
-            rec = last.get(key, {}).get(guid) if guid else None
-            if rec and rec.get("best"):
-                out["best_" + field] = rec["best"][0]
-                out["all_" + field] = rec["best"]
-                break
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -911,37 +884,6 @@ class Pool:
         return self.index[key]
 
 
-def geometry_for(replay, track_dir, scenes_dir, props_path):
-    """Whatever of the environment is cached -> (track, race, scene, shapes, note).
-
-    Nothing here is fatal. `note` is the honest sentence the recording prints
-    about what it could not draw, because a view that quietly omits the wall the
-    quad hit is worse than one that says the wall is missing."""
-    missing = []
-    try:
-        track, race, _tid, _rid = LT.for_replay(track_dir, replay)
-    except Exception:
-        track = race = None
-    if track is None:
-        return (None, None, None, {},
-                "no track data for this replay - the path, the attitude and the impacts "
-                "are drawn, the environment is not")
-    env = track.get("environment") or "?"
-    scene = None
-    sp = Path(scenes_dir) / ("%s.json" % env)
-    if sp.exists():
-        scene = json.loads(sp.read_text(encoding="utf-8"))
-        if scene.get("skipped"):
-            missing.append("%s has no %s geometry" % (env, ", ".join(scene["skipped"])))
-    else:
-        missing.append("the %s scene is not cached (liftoff_scene.py)" % env)
-    shapes = {}
-    pp = Path(props_path)
-    if pp.exists():
-        shapes = json.loads(pp.read_text(encoding="utf-8"))["items"]
-    else:
-        missing.append("prop shapes are not cached (liftoff_props.py)")
-    return track, race, scene, shapes, ("; ".join(missing) if missing else "")
 
 
 def find_crashes(rows, hits, ranges, names):
@@ -979,17 +921,24 @@ def stall_id(k, i):
     return "stall-%d-%d" % (k + 1, i)
 
 
-def build_recordings(rows, hits, crashes, report, names, geo, track_dir, dt,
-                     radius, stall_pad, crash_pad=CRASH_PAD):
-    """A payload per crash and per stall, all sharing one pool of geometry."""
-    track, race, scene, shapes, note = geo
+def build_recordings(rows, hits, crashes, report, names, scene, note,
+                     props_for, prop_size, dt, radius, stall_pad,
+                     crash_pad=CRASH_PAD):
+    """A payload per crash and per stall, all sharing one pool of geometry.
+
+    `props_for` is a callable the caller supplies: hand it the points of one
+    window and it answers what the sim's map has near them. It is injected
+    rather than imported because finding props means reading a sim's own track
+    files, and this module may not know that a sim exists. A caller with no
+    track data passes one that returns nothing, and every recording still draws
+    its path, its attitude and its impacts."""
     colliders, props = Pool(), Pool()
     items = {}
 
     def add(rec_id, title, i0, i1, focus):
-        data = LV.build(rows, i0, i1, focus=focus, radius=radius, track_dir=track_dir,
-                        track=track, race=race, scene=scene, shapes=shapes, hits=hits,
-                        note=note)
+        data = LV.build(rows, i0, i1, focus=focus, radius=radius,
+                        props=props_for(LV.window_points(rows, i0, i1)),
+                        prop_size=prop_size, scene=scene, hits=hits, note=note)
         found = data["props"]
         data["title"] = title
         data["colliders"] = [colliders.add(c) for c in data["colliders"]]
@@ -1872,262 +1821,3 @@ def md_to_html(md, title, recs=None):
             "<style>" + HTML_CSS + "</style></head><body>"
             + "".join(body) + "".join(scripts) + "</body></html>")
 
-# ---------------------------------------------------------------------------
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("replay", nargs="?", help="replay XML; omit with --latest")
-    ap.add_argument("--latest", action="store_true",
-                    help="take the newest replay from the Liftoff Recordings folder")
-    ap.add_argument("--root", default=str(LR.DEFAULT_ROOT), help="Recordings folder")
-    ap.add_argument("--archive-dir", default="replays",
-                    help="where the safety copy of a --latest replay goes")
-    ap.add_argument("-o", "--out", default="reports",
-                    help="parent folder for the report (default reports)")
-    ap.add_argument("--name", help="report folder name (default: the replay's)")
-    ap.add_argument("--laps", help='override lap ranges, "732:1879,1879:3056"')
-    ap.add_argument("--history", default="data/liftoff_history.json",
-                    help="PB snapshot history, from liftoff_pbs.py --save (default "
-                         "data/liftoff_history.json, relative to the working "
-                         "directory)")
-    ap.add_argument("--reset-debrief", action="store_true",
-                    help="discard the hand-written Debrief and put the stub back; "
-                         "without it, an existing Debrief is carried forward")
-    ap.add_argument("--no-html", action="store_true",
-                    help="skip report.html, the double-clickable copy of report.md")
-    ap.add_argument("--no-auto-open", "--no-open", action="store_true", dest="no_open",
-                    help="do not open report.html; pass this when you will open the "
-                         "finished report yourself, after the Debrief is written "
-                         "(--no-open is the older spelling of the same flag)")
-    ap.add_argument("--no-anim", action="store_true", help="skip the animated figures")
-    ap.add_argument("--anim-max", type=float, default=40.0,
-                    help="longest animation loop, seconds; anything longer is sped up and "
-                         "the factor is printed on the figure (default 40)")
-    ap.add_argument("--anim-frames", type=int, default=380, help="frames per animation")
-    ap.add_argument("--cam-span", type=float, default=45.0,
-                    help="metres across the follow cam on a lap animation (default 45)")
-    ap.add_argument("--tail-min", type=float, default=5.0,
-                    help="seconds of actual FLYING (above the stall speed) that "
-                         "untimed time either side of the laps must contain to "
-                         "earn its own segment (default 5). Grid time fails this.")
-    ap.add_argument("--stall-pad", type=float, default=4.0,
-                    help="seconds of context either side of a stall recording (default 4)")
-    ap.add_argument("--track-dir", default="trackdata",
-                    help="track, scene and prop caches for the recordings "
-                         "(default trackdata, relative to the working directory)")
-    ap.add_argument("--scenes", help="scene cache folder (default: <track-dir>/scenes)")
-    ap.add_argument("--props", help="prop shape table (default: <track-dir>/props.json)")
-    ap.add_argument("--rec-radius", type=float, default=25.0,
-                    help="metres of environment geometry around a recording (default 25)")
-    ap.add_argument("--no-rec", action="store_true",
-                    help="skip the crash and stall recordings; the tables stay, the "
-                         "play controls do not")
-    args = ap.parse_args()
-
-    path = Path(args.replay) if args.replay else None
-    if args.latest or path is None:
-        found = LR.find_replays(args.root)
-        if not found:
-            sys.exit("No replays under %s. Save one from the finish or pause screen." % args.root)
-        LR.refuse_inside_toolkit(args.archive_dir, "archived replays")
-        path, _ = LR.archive(found[0], args.archive_dir)
-        print("replay: %s" % path)
-
-    meta, rows = LR.parse(path)
-    rows = LR.add_velocity(rows)
-    meta["_source"] = str(path)
-
-    outdir = Path(args.out) / (args.name or Path(path).stem)
-    LR.refuse_inside_toolkit(args.out, "reports")
-    outdir.mkdir(parents=True, exist_ok=True)
-    csv_path = outdir / "flight.csv"
-    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        w.writerow(LR.COLUMNS)
-        for r in rows:
-            w.writerow([round(x, 6) for x in r])
-
-    aargs = AF.default_args(str(csv_path))
-    data = load_samples(str(csv_path), aargs)
-    dt = AF.sample_dt(data)
-
-    # lap boundaries come from the replay itself; --laps only overrides them
-    if args.laps:
-        ranges = AF.parse_laps(args.laps, len(data))
-    elif meta["lap_start_indices"] and meta["lap_times"]:
-        starts = meta["lap_start_indices"]
-        ranges = [(max(0, a), min(len(data), starts[i + 1] if i + 1 < len(starts)
-                                  else a + int(round(meta["lap_times"][i] / dt))))
-                  for i, a in enumerate(starts)]
-    else:
-        ranges = [(0, len(data))]
-    names = (["lap %d" % (i + 1) for i in range(len(ranges))]
-             if len(ranges) > 1 or meta["lap_times"] else ["flight"])
-
-    # A run that ends in a crash records a completed lap and then keeps
-    # recording, and lapTimes only describes the laps that FINISHED. Left alone,
-    # the flying after the last timed lap - which on a fatal run is the whole
-    # point - is analysed nowhere and silently disappears from the report. The
-    # 20:12 Rustline replay lost 69 s that way, the crash included.
-    #
-    # The tail is also treated as a segment for the cross-lap stall probe, which
-    # is legitimate: it crosses the same coordinates, so it is real evidence
-    # about what the track asked for there.
-    if not args.laps:
-        ranges, names = cover_tail(ranges, names, data, dt, args.tail_min,
-                                   aargs.stall_speed)
-
-    report = AF.analyse(data, ranges, names, dt, aargs)
-    if not report:
-        sys.exit("no moving samples in %s" % path)
-    pb = pb_context(meta, args.history)
-
-    assets = outdir / "assets"
-    # Clear the figures before redrawing. Every SVG in here is written by this
-    # run, so anything left from a previous one is stale by definition - and a
-    # stale figure is worse than a missing one, because it looks current. The
-    # 2026-08-27 grid-segment fix left anim_beforelap1.svg and five orphaned
-    # stall clips sitting in the folder describing a segment that no longer
-    # exists.
-    if assets.exists():
-        for old_svg in assets.glob("*.svg"):
-            old_svg.unlink()
-    rel = lambda p: str(Path(p).relative_to(outdir)).replace("\\", "/")
-    vref = max(1.0, pctl([s["spd"] for s in data], 90))
-    figs = {"csv": csv_path, "timeline": assets / "timeline.svg",
-            "traces": assets / "traces.svg"}
-
-    fig_timeline(data, ranges, names, report, figs["timeline"], "Lap times",
-                 best_lap=pb.get("best_lap"), lap_times=meta.get("lap_times"))
-    # There is no per-lap track figure. It drew the same path, in the same speed
-    # colours, as the overview map inside that lap's own playback animation, and
-    # a report that shows one flight twice teaches the reader to skim.
-    if len(ranges) > 1:
-        figs["line"] = assets / "line.svg"
-        fig_line(data, ranges, names, figs["line"], "Laps overlaid")
-    # the headline traces and the reference traces are separate figures, so the
-    # three that get read every time are not buried under the two that do not
-    fig_traces(data, ranges, names, report, figs["traces"],
-               "Speed, sideslip and throttle", ["speed", "sideslip", "throttle"])
-    figs["traces_extra"] = assets / "traces_extra.svg"
-    fig_traces(data, ranges, names, report, figs["traces_extra"],
-               "Tilt and stick inputs", ["tilt", "sticks"])
-    cf = assets / "corners.svg"
-    if fig_corners(report, names, cf, "Corner scorecard"):
-        figs["corners"] = cf
-
-    anims = {"laps": []}
-    if not args.no_anim:
-        for k, (a, b) in enumerate(ranges):
-            p = assets / ("anim_%s.svg" % names[k].replace(" ", ""))
-            rate = fig_anim(data, a, b, p, "%s, played back" % names[k],
-                            meta.get("environment") or "the track", vref,
-                            args.anim_max, args.anim_frames, args.cam_span)
-            if rate:
-                anims["laps"].append((p, rate))
-
-    # The two moments worth watching again, each recorded from its own row.
-    # A stall used to get a flat SVG clip printed under the table; the recording
-    # answers the same question in the place the reader asks it, and answers the
-    # one the clip could not - what was actually around the quad.
-    hits = LV.impacts(rows)
-    crashes = find_crashes(rows, hits, ranges, names)
-    recs = {"geo": [], "props": [], "items": {}}
-    if not args.no_rec and (crashes or any(e["stalls"] for e in report)):
-        scenes = args.scenes or str(Path(args.track_dir) / "scenes")
-        props = args.props or str(Path(args.track_dir) / "props.json")
-        geo = geometry_for(path, args.track_dir, scenes, props)
-        recs = build_recordings(rows, hits, crashes, report, names, geo, args.track_dir,
-                                dt, args.rec_radius, args.stall_pad)
-        if geo[4]:
-            print("  recordings: %s" % geo[4])
-
-    md_path = outdir / "report.md"
-    kept = None if args.reset_debrief else existing_debrief(md_path)
-    write(md_path, build_report(meta, data, ranges, names, report, pb, figs, anims, rel,
-                                kept, crashes, set(recs["items"])))
-    if kept:
-        print("  kept the existing Debrief section")
-    html_path = outdir / "report.html"
-    if not args.no_html:
-        write(html_path, md_to_html(md_path.read_text(encoding="utf-8"),
-                                    "%s - %s" % (meta.get("environment") or "?",
-                                                 meta.get("gamemode") or "?"), recs))
-    # The full analysis, deliberately a superset of the report.
-    #
-    # report.md and report.html are an argument made to a person, so they leave
-    # things out on purpose - collapsed sections, dropped panels, rounded
-    # figures. This file leaves nothing out, so a later reader (usually an LLM
-    # picking the session back up) never has to re-derive what was already
-    # computed, and never has to guess which thresholds produced a number.
-    full = {
-        "generated": datetime.now().isoformat(timespec="seconds"),
-        "source_replay": str(path),
-        "race_name": race_name(meta),
-        "meta": {k: v for k, v in meta.items() if not k.startswith("_")},
-        "sample_rate_hz": round(1.0 / dt, 3),
-        "sample_interval_s": round(dt, 6),
-        "speed_ref_kmh": round(vref, 2),
-        "speed_ref_note": "p90 speed; the figures' colour ramp saturates here",
-        "thresholds": {k: v for k, v in vars(aargs).items() if k != "csv"},
-        "segments_index": [
-            {"name": names[k], "start_index": a, "end_index": b,
-             "start_t": round(data[a]["t"], 3), "end_t": round(data[b - 1]["t"], 3),
-             "lap_time": (meta["lap_times"][k]
-                          if meta.get("lap_times") and k < len(meta["lap_times"])
-                          and names[k].startswith("lap") else None),
-             "timed_lap": bool(meta.get("lap_times") and k < len(meta["lap_times"])
-                               and names[k].startswith("lap"))}
-            for k, (a, b) in enumerate(ranges)],
-        "segments": report,
-        "findings": findings(meta, report, names, pb, crashes),
-        "crashes": crashes,
-        "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "
-                            "replay's isCrashed flag is not used, it reads false on "
-                            "flights that ended pinned against the ground"
-                            % LV.IMPACT_DROP_KMH),
-        "recordings": {"in": "report.html, opened from the crash and stall tables",
-                       "ids": sorted(recs["items"]),
-                       "titles": {i: d.get("title") for i, d in recs["items"].items()}},
-        "personal_bests": pb,
-        "figures": {k: (rel(v) if isinstance(v, Path)
-                        else {str(i): rel(p) for i, p in v.items()})
-                    for k, v in figs.items()},
-        "animations": {"laps": [rel(p) for p, _ in anims["laps"]]},
-        "not_in_report": [
-            "per-sample trajectory, attitude and stick positions: flight.csv",
-            "tilt and stick traces are collapsed in the report; the numbers are "
-            "in segments[].tilt_* and segments[].yaw_only",
-            "the corner table is collapsed in the report; full detail in "
-            "segments[].corners, and every stall in segments[].stalls",
-            "the recordings are in report.html only; the windows they cut are "
-            "described by crashes[] and segments[].stalls",
-        ],
-    }
-    with open(outdir / "analysis.json", "w", encoding="utf-8") as fh:
-        json.dump(full, fh, indent=2)
-
-    print("report: %s" % md_path)
-    print("        %s" % (outdir / "analysis.json"))
-    if not args.no_html:
-        print("        %s" % html_path)
-    print("  %d figures, %d animations, %d segment(s), %d recording(s)"
-          % (len(figs) - 1, len(anims["laps"]), len(ranges), len(recs["items"])))
-
-    # The report is the deliverable, so show it rather than printing a path and
-    # trusting someone to follow it. Failure here is never worth aborting on:
-    # the files are already written, and a machine with no browser - a CI box, a
-    # headless container - must still exit 0.
-    if not (args.no_html or args.no_open):
-        try:
-            opened = webbrowser.open(html_path.resolve().as_uri())
-        except Exception:
-            opened = False
-        if not opened:
-            print("  (could not open a browser; open the file above by hand)")
-
-
-if __name__ == "__main__":
-    main()

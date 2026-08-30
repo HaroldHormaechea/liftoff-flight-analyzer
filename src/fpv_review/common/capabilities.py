@@ -2,16 +2,25 @@
 """
 capabilities.py - what a sim can and cannot tell us, declared rather than found out.
 
-The rule this exists to enforce: a stage that receives a declared gap NAMES it
-and never infers the value. It is the same rule the project already applies to
+The rule this exists to serve: a stage that receives a declared gap NAMES it and
+never infers the value. It is the same rule the project already applies to
 missing collision geometry - a recording without a cached scene still draws the
-path, the attitude and the impacts, and prints what it could not draw - applied
-to every field instead of only that one.
+path, the attitude and the impacts, and prints what it could not draw - written
+here so that it can cover every field instead of only that one.
 
-One function does both halves of the job. `gap(caps, field)` produces the
-sentence a report prints AND records that the gap was consulted, so a stage
-cannot quietly consume a field the sim does not have without the report learning
-about it. A second, parallel mechanism for the same thing is how the two drift.
+The mechanism has two halves, and one of them runs. Each sim's `declare()`
+builds the declaration, and cli.py publishes it through `as_json()` as one
+additive key in analysis.json. That half is exercised on every report.
+
+The consuming half - `gap()` and `has()` - is provided and has no call site
+today. `gap(caps, field)` returns the sentence a report would print AND records
+the consultation, so that a stage cannot explain a hole to the reader without
+the same call putting it in analysis.json; a second, parallel mechanism for the
+same thing is how the two drift apart. Nothing calls it because Liftoff gives it
+nothing to do: Liftoff declares no gap that suppresses a finding the report
+makes, so `gaps_named_in_this_run` is empty in every report this repository has
+produced. It waits here for the sim that does have such a gap. Read it as
+provided, not as a rule being enforced today, and not as unfinished work.
 """
 
 from dataclasses import dataclass, field

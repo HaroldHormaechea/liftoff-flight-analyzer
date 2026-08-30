@@ -97,6 +97,14 @@ def cmd_view(args, sim):
                  % (series[-1].t - t0))
     i0, i1 = span
 
+    # The guard sits here and not in tracks.load_index, which report reaches too
+    # through geometry_for: a sys.exit there raises SystemExit, which escapes that
+    # function's `except Exception` and turns report's clean exit-0 degrade into an
+    # abort with a half-written output directory. view is the command that cannot
+    # continue without the index, so view is where it refuses.
+    if not (Path(args.track_dir) / "index.json").exists():
+        sys.exit("no track index in %s.\nBuild it: %s"
+                 % (args.track_dir, toolkit.command("tracks", "-o", args.track_dir)))
     track, race, _tid, _rid = sim["tracks"].for_replay(args.track_dir, args.replay)
     if track is None:
         sys.exit("this replay has no track, so there is no environment to draw")

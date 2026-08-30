@@ -128,6 +128,20 @@ the approved vocabulary is published only in the licensed specification.
     probe had been passing over vacuously; it is the third time this artifact has
     turned out to be the one that matters.
 
+    **18a covers three replays by page comparison, and the fourth by its refusal
+    — deliberately.** `TheRussianWoodpecker`'s scene is not in the cache, so `view`
+    on it exits 1 with "no cached scene". **Do not build that cache.** Building it
+    would gain a fourth byte-comparison and lose the only coverage of two behaviours
+    worth more than it: `view`'s **refusal contract** (exit 1, no file written, and a
+    printed command that runs — UC-01 recorded this as a deliberate asymmetry against
+    `report`, which degrades instead) and the degraded-geometry path in `report`.
+    So: **compare pages byte-for-byte on the three cached replays, and assert on the
+    fourth that `view` still exits 1, writes no file, and prints a runnable command.**
+    Four replays, two kinds of check, nothing silently dropped. Verified by the
+    challenger against unchanged code: the three cached pages are byte-identical
+    across runs (222,363 / 187,422 / 288,951 bytes), so `cmp` is a true
+    zero-tolerance instrument here rather than an assumed one.
+
     Run material is prepared at `C:\dev\liftoff-uc02-run\`: `trackdata/` (187
     entries with `index.json`, `props.json` and `scenes/`), `data/liftoff_history.json`,
     and `replays/` holding the same four archived replays UC-01 used —
@@ -139,6 +153,23 @@ the approved vocabulary is published only in the licensed specification.
     never from the worktree, and pass archived paths explicitly — never `--latest`,
     which re-archives and re-picks. `use-cases/plans/01-multi-sim-architecture-adr.md`
     § 15a records the traps, each of which produced a confidently wrong result once.
+
+20. **`view` degrades rather than crashing when there is no track data at all.**
+    *(Added 2026-08-30 — third defect, found by the challenger while calibrating 18a.)*
+    With no `trackdata/index.json`, `cmd_view` raises an unhandled `FileNotFoundError`
+    out of `tracks.load_index` (`sources/liftoff/tracks.py:408`) and prints a raw
+    traceback at exit 1. The `track is None` guard at `cli.py:101` is unreachable,
+    because `for_replay` dies before returning. `cmd_report` in the identical
+    situation degrades cleanly at exit 0.
+
+    **This is in scope because the guide creates the situation.** Criterion 19 tells
+    a contributor that a saved replay is enough to get started; the first thing such
+    a reader has — a replay and no cache — is exactly the input that produces a
+    traceback. Fix `view` to fail the way the rest of the tool fails: a stated reason
+    and a runnable command, not a stack trace. The existing refusal for an uncached
+    *scene* is the model to match. This does not change the refusal contract in 18a,
+    which concerns a cached index and a missing scene — a different and already
+    well-behaved case.
 
 19. **The guide states the Liftoff requirement up front.** A contributor needs a
     Liftoff install and their own saved replay to verify any change, because
@@ -172,6 +203,17 @@ the approved vocabulary is published only in the licensed specification.
   accept a contract-conformant package is the change that would actually make the
   contract true. Weigh both; do not default to the cheaper one because it is
   smaller. Whatever is chosen must leave the ADR and the code in agreement.
+- **Settled empirically, 2026-08-30** — the narrowed precondition is true of one
+  command and false of another, so the guide must not generalise it. From a
+  directory holding nothing but a replay XML, `report` **exits 0** and produces a
+  full report, printing "no track data for this replay — the path, the attitude and
+  the impacts are drawn, the environment is not". `view` **cannot run at all**
+  without track data, and neither can `tracks --check`. So the honest relief is
+  narrower than "you need only a replay file": a saved replay can be **analysed**
+  without the game; it cannot be **viewed**. Since 18a makes `view` the strictest
+  check in the run, a guide claiming a replay file suffices would be wrong about the
+  very command the verification story depends on. State the Liftoff requirement up
+  front per criterion 19, then this narrower fact as the relief it is.
 - **Risk (added)** — The code fixes are small and their verification is not: the
   whole point of criterion 18 is that output must not move. The migration's
   baseline apparatus was deleted after UC-01 merged, so this run must re-establish

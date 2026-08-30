@@ -83,8 +83,7 @@ from pathlib import Path
 
 from fpv_review.sources.liftoff import unityfs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import liftoff_replay as LR          # refuse_inside_toolkit, and nothing else
+from fpv_review.common import toolkit    # refuse_inside_toolkit, and nothing else
 
 FORMAT = 1                            # bump when index.json's shape changes
 STEAM_APPID = "410340"
@@ -315,7 +314,7 @@ def fingerprint(path):
 
 
 def extract(out_dir, game, max_mb=unityfs.MAX_BUNDLE_MB):
-    LR.refuse_inside_toolkit(out_dir, "extracted track data")
+    toolkit.refuse_inside_toolkit(out_dir, "extracted track data")
     bundles = bundle_dir(game)
     print("game:    %s" % game)
     print("bundles: %s" % bundles)

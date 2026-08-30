@@ -146,12 +146,12 @@ def cmd_analyse(args, sim):
     else:
         ranges = [(0, len(data))]
         names = ["flight"]
-    report = analysis.analyse(data, ranges, names, dt, args)
+    analysed = analysis.analyse(data, ranges, names, dt, args)
 
     if args.json:
-        print(json.dumps(report, indent=2))
+        print(json.dumps(analysed, indent=2))
         return
-    for e in report:
+    for e in analysed:
         print("%s  %.1fs" % (e["segment"].upper(), e["duration_s"]))
         print("  speed     median %3d  p90 %3d  max %3d km/h" %
               (e["speed_median"], e["speed_p90"], e["speed_max"]))
@@ -187,7 +187,7 @@ def cmd_analyse(args, sim):
                        s["verdict"], s["why"],
                        "  [OFF LINE by %.1f m]" % s["other_lap"]["dist_m"]
                        if s["off_line"] else ""))
-            if not args.laps or len(report) < 2:
+            if not args.laps or len(analysed) < 2:
                 print("   (single segment: no cross-lap evidence, verdicts marked ? "
                       "rest on the reversal test alone)")
         if args.trace and e["stalls"]:

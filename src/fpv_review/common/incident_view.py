@@ -50,10 +50,7 @@ import math
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import liftoff_replay as LR
-import liftoff_scene as LS
-import liftoff_tracks as LT
+from fpv_review.common import geometry
 
 
 def impacts(rows, drop_kmh, debounce):
@@ -462,7 +459,7 @@ def build(rows, i0, i1, focus=None, radius=25.0, props=None, prop_size=None,
     points = window_points(rows, i0, i1)
     window = rows[i0:i1]
     t0 = rows[0][0]
-    kept = LS.cull(scene, points, radius) if scene else []
+    kept = geometry.cull(scene, points, radius) if scene else []
 
     focus = i0 + (i1 - i0) // 2 if focus is None else min(max(focus, i0), i1 - 1)
     centre = list(rows[focus][1:4])

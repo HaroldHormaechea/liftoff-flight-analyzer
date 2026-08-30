@@ -85,9 +85,10 @@ from pathlib import Path
 
 from fpv_review.common import geometry
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import liftoff_replay as LR
-import liftoff_tracks as LT
+from fpv_review.common import toolkit
+from fpv_review.sources.liftoff import replay
+from fpv_review.sources.liftoff import tracks
+from fpv_review.sources.liftoff import unityfs
 
 FORMAT = 1
 DEFAULT_RADIUS = 30.0
@@ -145,13 +146,13 @@ def scene_bundles(bundles):
 def _node_names(path, cap=2_000_000):
     with open(path, "rb") as fh:
         raw = fh.read(cap)
-    sig, at = LT._cstr(raw, 0)
+    sig, at = unityfs._cstr(raw, 0)
     if sig != "UnityFS":
         return []
     version, = struct.unpack_from(">I", raw, at)
     at += 4
-    _, at = LT._cstr(raw, at)
-    _, at = LT._cstr(raw, at)
+    _, at = unityfs._cstr(raw, at)
+    _, at = unityfs._cstr(raw, at)
     _size, packed, unpacked, flags = struct.unpack_from(">qIII", raw, at)
     at += 20
     if flags & 0x80:
@@ -160,7 +161,7 @@ def _node_names(path, cap=2_000_000):
         at = (at + 15) // 16 * 16
     info = raw[at:at + packed]
     if flags & 0x3F in (2, 3):
-        info = LT.lz4_block(info, unpacked)
+        info = unityfs.lz4_block(info, unpacked)
     walk = 16
     count, = struct.unpack_from(">I", info, walk)
     walk += 4 + 10 * count
@@ -169,14 +170,14 @@ def _node_names(path, cap=2_000_000):
     names = []
     for _ in range(count):
         walk += 20
-        name, walk = LT._cstr(info, walk)
+        name, walk = unityfs._cstr(info, walk)
         names.append(name)
     return names
 
 
 def gate_cloud(track_dir, environment):
     """Every gate position for an environment, as the fingerprint to match on."""
-    index = LT.load_index(track_dir)
+    index = tracks.load_index(track_dir)
     points = []
     for _guid, track in index["tracks"].items():
         if track["environment"] != environment:
@@ -184,8 +185,8 @@ def gate_cloud(track_dir, environment):
         race = index["races"].get(track.get("race") or "")
         if not race:
             continue
-        root = LT.parse_xml(Path(track_dir) / track["file"])
-        points += [g["pos"] for g in LT.gates(root, race["route"]) if g]
+        root = tracks.parse_xml(Path(track_dir) / track["file"])
+        points += [g["pos"] for g in tracks.gates(root, race["route"]) if g]
     return points
 
 
@@ -344,9 +345,13 @@ def cloud_score(colliders, cloud):
 MAX_PATH_INSIDE = 0.005
 
 
-def flight_path(replay, stride=15):
-    """A thinned position track from a replay, for use as the free-space witness."""
-    _meta, rows = LR.parse(replay)
+def flight_path(replay_path, stride=15):
+    """A thinned position track from a replay, for use as the free-space witness.
+
+    The parameter is `replay_path` rather than `replay`, because this module now
+    imports the `replay` module and a parameter of that name would hide it for
+    the whole function body."""
+    _meta, rows = replay.parse(replay_path)
     return [(r[1], r[2], r[3]) for r in rows][::stride]
 
 
@@ -362,7 +367,7 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
     pick the right bundle for both environments where the truth is known.
 
     `--bundle` skips all of it when the answer is already known."""
-    game = LT.find_game()
+    game = tracks.find_game()
     if game is None:
         sys.exit("could not find the Liftoff install. Set LIFTOFF_DIR, or check "
                  "liftoff_tracks.py --check.")
@@ -370,9 +375,9 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
     if not cloud:
         sys.exit("no gates known for environment %r - run liftoff_tracks.py first, and check "
                  "the name with liftoff_tracks.py --list." % environment)
-    LR.refuse_inside_toolkit(out_dir, "extracted scene geometry")
+    toolkit.refuse_inside_toolkit(out_dir, "extracted scene geometry")
 
-    bundles = LT.bundle_dir(game)
+    bundles = tracks.bundle_dir(game)
     if bundle:
         candidates = [bundles / bundle]
         if not candidates[0].exists():
@@ -427,7 +432,7 @@ def build(environment, track_dir, out_dir, witness=None, bundle=None,
         "source": {
             "bundle": candidate.name,
             "size": candidate.stat().st_size,
-            "build_id": LT.build_id(game),
+            "build_id": tracks.build_id(game),
             "unity_version": unity_version(),
             "identified_by": "bundle given" if bundle else
                              "%.0f%% gates near, %.2f%% of witness path inside"
@@ -508,7 +513,7 @@ def main():
     out_dir = Path(args.out) if args.out else Path(args.track_dir) / "scenes"
 
     if args.list:
-        index = LT.load_index(args.track_dir)
+        index = tracks.load_index(args.track_dir)
         wanted = sorted({t["environment"] for t in index["tracks"].values()})
         for environment in wanted:
             path = out_dir / ("%s.json" % environment)

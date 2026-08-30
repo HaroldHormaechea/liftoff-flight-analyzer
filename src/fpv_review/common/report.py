@@ -70,12 +70,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import analyze_flight as AF
-import liftoff_replay as LR
-import liftoff_tracks as LT
-import liftoff_view as LV
+from fpv_review.common import analysis
+from fpv_review.common import incident_view
 
 # ---------------------------------------------------------------------------
 # palette
@@ -240,10 +236,10 @@ def unwrap(seq):
 
 def load_samples(csv_path, args):
     """analyze_flight.load, plus the nose bearing it computes and discards."""
-    data = AF.load(csv_path, args.speed_floor)
+    data = analysis.load(csv_path, args.speed_floor)
     for s, r in zip(data, csv.DictReader(open(csv_path))):
         q = (float(r["quat_x"]), float(r["quat_y"]), float(r["quat_z"]), float(r["quat_w"]))
-        f = AF.rotate(q, (0, 0, 1))
+        f = analysis.rotate(q, (0, 0, 1))
         s["nose"] = math.degrees(math.atan2(f[0], f[2]))
     return data
 
@@ -936,8 +932,8 @@ def build_recordings(rows, hits, crashes, report, names, scene, note,
     items = {}
 
     def add(rec_id, title, i0, i1, focus):
-        data = LV.build(rows, i0, i1, focus=focus, radius=radius,
-                        props=props_for(LV.window_points(rows, i0, i1)),
+        data = incident_view.build(rows, i0, i1, focus=focus, radius=radius,
+                        props=props_for(incident_view.window_points(rows, i0, i1)),
                         prop_size=prop_size, scene=scene, hits=hits, note=note)
         found = data["props"]
         data["title"] = title
@@ -1810,7 +1806,7 @@ def md_to_html(md, title, recs=None):
         body.append(REC_MODAL)
         scripts.append("<script>const FPV_REC = "
                        + json.dumps(recs, separators=(",", ":")) + ";</script>")
-        scripts.append("<script>" + LV.VIEWER_JS + "</script>")
+        scripts.append("<script>" + incident_view.VIEWER_JS + "</script>")
         scripts.append("<script>" + REC_JS + "</script>")
     # The .js flag is set in <head>, before the body paints, so the browser
     # never shows the whole report for a frame and then collapses it to one tab.

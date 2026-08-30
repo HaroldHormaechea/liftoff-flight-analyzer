@@ -1,6 +1,6 @@
 {
-  "generated": "2026-08-28T18:41:15",
-  "source_replay": "fpv-drone\\replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
+  "generated": "2026-08-30T11:19:02",
+  "source_replay": "replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
   "race_name": "03 - Stuff That Works",
   "meta": {
     "name": "03 - Stuff That Works - 01_20_953 - 2026-08-28",
@@ -600,8 +600,15 @@
     "**3 corners skidded** (over 30 deg of sideslip).",
     "**Best lap here was 0:26.184, against a personal best of 0:22.350** on the same geometry (+3.8 s)."
   ],
+  "crashes": [],
+  "crash_detection": "speed lost inside one 0.1 s sample, >= 20 km/h; the replay's isCrashed flag is not used, it reads false on flights that ended pinned against the ground",
+  "recordings": {
+    "in": "report.html, opened from the crash and stall tables",
+    "ids": [],
+    "titles": {}
+  },
   "personal_bests": {
-    "taken_at": "2026-08-28T16:28:52",
+    "taken_at": "2026-08-29T20:04:17",
     "best_race": 80.95347,
     "all_race": [
       80.95347,
@@ -632,12 +639,12 @@
       "assets/anim_lap1.svg",
       "assets/anim_lap2.svg",
       "assets/anim_lap3.svg"
-    ],
-    "stalls": []
+    ]
   },
   "not_in_report": [
     "per-sample trajectory, attitude and stick positions: flight.csv",
     "tilt and stick traces are collapsed in the report; the numbers are in segments[].tilt_* and segments[].yaw_only",
-    "corner and stall tables are collapsed in the report; full detail in segments[].corners and segments[].stalls"
+    "the corner table is collapsed in the report; full detail in segments[].corners, and every stall in segments[].stalls",
+    "the recordings are in report.html only; the windows they cut are described by crashes[] and segments[].stalls"
   ]
 }

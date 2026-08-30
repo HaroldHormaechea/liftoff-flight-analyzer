@@ -22,7 +22,7 @@ environment per game patch. What they produce is plain JSON, so everything that
 | `liftoff_tracks.py` | extract the game's track and race geometry: where the gates are | — |
 | `liftoff_scene.py` | an environment's collision geometry, and the cull to one incident | UnityPy |
 | `liftoff_props.py` | collider shapes for the items a track is built from | UnityPy |
-| `liftoff_view.py` | a 3D view of an incident: geometry, path, orbit, scrub | — |
+| `liftoff_view.py` | the 3D incident view: geometry, path, orbit, scrub — as its own page, and as the recordings inside a report | — |
 | `liftoff_telemetry.py` | live UDP feed at 100 Hz — only source of gyro/RPM | — |
 
 ## The normal run
@@ -43,10 +43,10 @@ That writes `reports/<replay-stem>/`:
 | file | for whom |
 |---|---|
 | `report.md` | the pilot reads it; the Debrief is written into it by hand |
-| `report.html` | the same report, double-clickable, animations playing |
+| `report.html` | the same report, double-clickable, animations playing, crash and stall recordings inside it |
 | `analysis.json` | **everything**, including what the report leaves out |
 | `flight.csv` | the decoded per-sample data |
-| `assets/*.svg` | figures and animated replays |
+| `assets/*.svg` | figures and the animated lap replays |
 
 Lap boundaries come from the replay metadata, so nothing has to be worked out by
 hand. Untimed flying either side of the laps that finished gets its own segment
@@ -70,7 +70,7 @@ never has to guess which threshold produced a number.
 ### Section order
 
 Header, **Debrief**, **Data analysis**, **Lap times**, **Flight playback**,
-**Numbers**, then everything else collapsed. The debrief
+**Highlights and recordings**, then everything else collapsed. The debrief
 leads because it is the answer, and everything after it is the evidence for the
 answer — which only gets read when the answer provokes a question.
 
@@ -84,6 +84,42 @@ flight twice teaches the reader to skim. `line.svg` survives the same cull
 because it answers a different question — where the *line* moved between laps —
 and it is the one thing the playback cannot show, the playback being always one
 lap.
+
+### Recordings of the crashes and the stalls
+
+A crash and a stall are the two moments a pilot wants to look at again, and a
+table row describing one is not a look at it. So the **Highlights and
+recordings** section leads with the Crashes table, then Stalls — both open on
+arrival — and only then the numbers behind them. Every row in those two tables
+carries a play control on the row itself — an icon captioned
+*view recording* — and it opens the 3D incident view for that moment in a window
+inside the page: the environment, the track props, the flown path coloured by
+speed, the quad at its true attitude, every impact marked. Orbit, zoom, scrub,
+play, close.
+
+- **The renderer is `liftoff_view.py`, imported.** `build()` cuts the window and
+  `VIEWER_JS` draws it, for the standalone page and for the report alike. There
+  is one projection, one playback loop, and one place to fix either.
+- **Crashes are found in the trajectory.** Twenty km/h or more lost inside one
+  0.1 s sample is not something braking does. The replay's `isCrashed` flag is
+  not used at all: it reads *false* on a run that ended pinned against the
+  ground at full throttle. The table also names the nearest **solid** track prop
+  to the impact, which is usually the answer to what was hit.
+- **Geometry is best-effort, and says so.** An environment's colliders exist only
+  once its scene bundle has been cached, and prop shapes only once the prefabs
+  have been. A recording without them still draws the path, the attitude and the
+  impacts — all from the replay — and prints what is missing in its own footer
+  rather than quietly showing a crash into clear air.
+- **It is a window in the page, not a browser pop-up**, in the report's own
+  palette. A real pop-up loses the palette, the scroll position and, in most
+  browsers, the click that asked for it.
+- **One window, and pooled geometry.** Only one recording is ever being watched,
+  so there is one canvas, built on click. Colliders and props are shared across
+  recordings and referenced by index, because incidents cluster — two impacts
+  0.7 s apart cull almost the same geometry twice.
+
+`--no-rec` skips the recordings; `--track-dir`, `--scenes`, `--props` say where
+the caches are, and `--rec-radius` how many metres of environment to include.
 
 ### Tabs, in the HTML only
 
@@ -109,7 +145,8 @@ Three things are deliberate:
   panel, because paper has no tabs.
 
 The active tab is written to the fragment with `history.replaceState`, so
-`report.html#numbers` deep-links and the back button still leaves the report
+`report.html#highlights-and-recordings` deep-links and the back button still
+leaves the report
 rather than walking back through tab clicks. Arrow keys, Home and End move
 between tabs.
 
@@ -224,6 +261,10 @@ python liftoff_scene.py --environment LiftoffArena --witness replays/<a flight t
 python liftoff_props.py
 python liftoff_view.py --replay replays/<crash>.xml -o crash.html
 ```
+
+Cache an environment once and every later report of a flight there gets its
+geometry for free, in the recordings behind the crash and stall tables. Without
+the caches those recordings still work; they just draw fewer things and say so.
 
 Three sources, because a track is assembled from three:
 

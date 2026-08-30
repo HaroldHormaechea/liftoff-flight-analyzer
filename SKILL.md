@@ -106,8 +106,9 @@ what is around them.
 
 ## The deliverable is an illustrated report, not a terminal dump
 
-`fpv_report.py` writes a folder holding the report, its figures and animated
-replays of every lap and every stall. That is what the pilot gets. The terminal
+`fpv_report.py` writes a folder holding the report, its figures, an animated
+replay of every lap, and a playable 3D recording of every crash and every stall.
+That is what the pilot gets. The terminal
 output of `analyze_flight.py` is for answering a quick question mid-conversation,
 not for a review.
 
@@ -123,10 +124,11 @@ python $S/fpv_report.py replays/<file>.xml        # a specific archived one
 `reports/<replay-stem>/`:
 
     report.md          the debrief the pilot reads and you edit
-    report.html        the same thing, double-clickable, animations playing
+    report.html        the same thing, double-clickable, animations playing,
+                       crash and stall recordings inside it
     analysis.json      EVERYTHING, including what the report leaves out
     flight.csv         the decoded per-sample data
-    assets/*.svg       figures and animated replays
+    assets/*.svg       figures and the animated lap replays
 
 **`analysis.json` is the one you read, not `report.md`.** The report is an
 argument made to a person: sections are collapsed, panels are dropped, numbers
@@ -137,15 +139,16 @@ list naming what was left out and where it lives instead. Never re-derive from
 `flight.csv` what is already sitting in there.
 
 Report structure, in reading order: a compact header, then **Debrief**, **Data
-analysis**, **Lap times**, **Flight playback**, **Numbers**, then everything else
-collapsed. The debrief leads because it is the answer, and
+analysis**, **Lap times**, **Flight playback**, **Highlights and recordings**,
+then everything else collapsed. The debrief leads because it is the answer, and
 everything after it is the evidence — which only gets read when the answer
 provokes a question.
 
 In `report.html` those sections are **tabs**, in a row under the race header, and
 the Debrief is the one open on arrival. `report.md` is unchanged — one linear
 document, still correct on GitHub and in the VS Code preview. A tab click updates
-the fragment, so `report.html#numbers` opens straight into that section and is
+the fragment, so `report.html#highlights-and-recordings` opens straight into that
+section and is
 worth linking directly when the answer lives in one place.
 
 **Archiving matters.** Liftoff names a replay after its track and total time, so
@@ -165,8 +168,8 @@ up a hand-written debrief.
 
 Useful flags: `--no-anim` when only the numbers are wanted, `--no-open` to keep
 the browser shut, `--cam-span` for the follow-cam width in metres, `--stall-pad`
-for context around a stall clip, `--reset-debrief` to clear a hand-written
-debrief instead of carrying it forward.
+for context around a stall recording, `--no-rec` to skip the recordings entirely,
+`--reset-debrief` to clear a hand-written debrief instead of carrying it forward.
 
 ## Step 3 — read the figures before writing a word
 
@@ -191,6 +194,17 @@ debrief instead of carrying it forward.
   about inputs rather than results.
 - **Corner scorecard** — tilt against sideslip, plus throttle added per corner.
   Down and to the right is a committed, coordinated corner.
+- **The recordings**, under **Highlights and recordings**, which leads with the
+  Crashes table, then Stalls, then the reference numbers behind them. Every row
+  of the Crashes and Stalls
+  tables carries a play control, and it opens that moment in 3D inside the page
+  — the environment, the track props, the path coloured by speed, the quad at
+  its true attitude, the impact marked. Orbit it. This is the only view that
+  shows what was actually AROUND the quad, which is the difference between "the
+  speed collapsed" and "it clipped the ramp on the inside of the turn". When the
+  environment has not been cached the recording says so in its footer and draws
+  what it has; cache it with `liftoff_scene.py` and `liftoff_props.py` once per
+  environment (see `scripts/README.md`).
 
 What to read in the numbers:
 
@@ -202,6 +216,11 @@ What to read in the numbers:
   flown on yaw alone is a pirouette: the airframe rotates, the path does not
   bend. Reported by speed band, because the fault typically appears as yaw
   authority rising while roll authority stays flat as speed drops.
+- **`crashes`** — every impact in the flight, found in the trajectory: 20 km/h
+  or more lost inside one 0.1 s sample. The replay's own `isCrashed` flag is not
+  used, because it reads false on runs that ended pinned against the ground.
+  Each carries the speed lost, the height, and the nearest solid track prop —
+  usually what was hit.
 - **`stalls`** — every episode below 10 km/h, classified `overrun` (the path
   reversed and retraced itself), `corner` (another lap turns there too, so the
   track asked for it) or `hesitation` (another lap flies straight through). This

@@ -77,6 +77,64 @@ transition:color .12s,background .12s,border-color .12s}
 /* Paper has no tabs: print every panel, in order, and drop the nav. */
 @media print{.tabs{display:none!important}.js .panel{display:block!important}
 .panel>h2:first-child{border-top:1px solid var(--line);padding-top:22px;margin-top:52px}}
+
+/* Recordings. The control sits in the event's own row - the moment and the way
+   to watch it on one line - and opens a window inside the page rather than a
+   browser one: a real pop-up loses the report's palette, its scroll position
+   and, in most browsers, the click that asked for it. */
+a.rec{display:inline-flex;flex-direction:column;align-items:center;gap:2px;
+text-decoration:none;color:var(--acc);padding:3px 8px;border-radius:7px;line-height:1.15}
+a.rec:hover{background:var(--pan)}
+a.rec svg{display:block}
+a.rec span{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+color:var(--mut)}
+a.rec:hover span{color:var(--acc)}
+a.rec:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+th.rc,td.rc{position:sticky;right:0;text-align:center;background:var(--bg);
+box-shadow:-9px 0 9px -9px rgba(0,0,0,.35)}
+tr:hover td.rc{background:var(--pan)}
+.recwrap{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+justify-content:center;padding:24px}
+.recwrap[hidden]{display:none}
+.recdim{position:absolute;inset:0;background:rgba(9,11,14,.62)}
+.recwin{position:relative;display:flex;flex-direction:column;width:min(1080px,100%);
+max-height:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
+.recbar{display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;
+background:var(--pan);border-bottom:1px solid var(--line)}
+.recbar h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--fg);
+text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;
+text-overflow:ellipsis}
+.recx{appearance:none;-webkit-appearance:none;border:1px solid transparent;
+background:transparent;color:var(--mut);font:inherit;font-size:15px;line-height:1;
+padding:5px 9px;border-radius:7px;cursor:pointer}
+.recx:hover{background:var(--bg);border-color:var(--line);color:var(--fg)}
+/* The stage keeps its own dark ground in both themes. It is a view through a
+   camera, not a panel of the document, and the geometry colours were chosen
+   against this background. */
+.recstage{position:relative;background:#0e1116;height:min(60vh,560px)}
+.recstage canvas{display:block;width:100%;height:100%;cursor:grab}
+.recstage canvas.drag{cursor:grabbing}
+.rechud,.reclegend{position:absolute;top:10px;pointer-events:none;color:#c9d1d9;
+text-shadow:0 1px 3px #000}
+.rechud{left:13px;font-size:12px}
+.reclegend{right:13px;text-align:right;font-size:11px;line-height:1.65}
+.reclegend i{display:inline-block;width:9px;height:9px;margin-right:5px;
+border-radius:2px;vertical-align:middle}
+.recctl{display:flex;align-items:center;gap:10px;padding:10px 14px;
+border-top:1px solid var(--line);background:var(--pan)}
+.recctl input[type=range]{flex:1;min-width:120px;accent-color:var(--acc)}
+.recbtn{appearance:none;-webkit-appearance:none;border:1px solid var(--line);
+background:var(--bg);color:var(--fg);font:inherit;font-size:13px;padding:5px 12px;
+border-radius:7px;cursor:pointer}
+.recbtn:hover{border-color:var(--acc);color:var(--acc)}
+.rectime{font-variant-numeric:tabular-nums;color:var(--mut);font-size:13px;min-width:92px}
+.recnote{margin:0;padding:9px 14px 12px;background:var(--pan);color:var(--mut);
+font-size:12px;border-top:1px solid var(--line)}
+.recnote[hidden]{display:none}
+@media (max-width:640px){.recctl{flex-wrap:wrap}.recstage{height:46vh}
+.reclegend{display:none}}
+@media print{.recwrap{display:none!important}}
 </style></head><body><main><div class="rhead">
 <div class="rmeta">
 <span class="k">Race:</span> <b>03 - Stuff That Works</b> &nbsp;·&nbsp; Race, 3 laps<br>
@@ -89,7 +147,7 @@ transition:color .12s,background .12s,border-color .12s}
 <button class="tab" type="button" role="tab" id="tab-data-analysis" data-panel="data-analysis" aria-controls="data-analysis" aria-selected="false" tabindex="-1">Data analysis</button>
 <button class="tab" type="button" role="tab" id="tab-lap-times" data-panel="lap-times" aria-controls="lap-times" aria-selected="false" tabindex="-1">Lap times</button>
 <button class="tab" type="button" role="tab" id="tab-flight-playback" data-panel="flight-playback" aria-controls="flight-playback" aria-selected="false" tabindex="-1">Flight playback</button>
-<button class="tab" type="button" role="tab" id="tab-numbers" data-panel="numbers" aria-controls="numbers" aria-selected="false" tabindex="-1">Numbers</button>
+<button class="tab" type="button" role="tab" id="tab-highlights-and-recordings" data-panel="highlights-and-recordings" aria-controls="highlights-and-recordings" aria-selected="false" tabindex="-1">Highlights and recordings</button>
 </nav>
 <section class="panel" id="debrief" role="tabpanel" aria-labelledby="tab-debrief">
 <h2>Debrief</h2>
@@ -133,8 +191,8 @@ transition:color .12s,background .12s,border-color .12s}
 <p>Every lap on one map, each a different colour. Where the laps separate is a LINE difference. No change of stick technique moves a line - only knowing the track does.</p>
 </details>
 </section>
-<section class="panel" id="numbers" role="tabpanel" aria-labelledby="tab-numbers">
-<h2>Numbers<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
+<section class="panel" id="highlights-and-recordings" role="tabpanel" aria-labelledby="tab-highlights-and-recordings">
+<h2>Highlights and recordings<button class="xall" type="button" data-open="0"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>expand all</span></button></h2>
 <div class="tw"><table><thead><tr><th>Segment</th><th>s</th><th>spd med</th><th>spd p90</th><th>spd max</th><th>tilt med</th><th>slip med</th><th>slip p90</th><th>thr med</th><th>under 10 km/h</th></tr></thead><tbody><tr><td>lap 1</td><td>26.2</td><td>52</td><td>68</td><td>82</td><td>40</td><td>15.4</td><td>32.8</td><td>0.67</td><td>0.0</td></tr><tr><td>lap 2</td><td>26.8</td><td>52</td><td>72</td><td>87</td><td>47</td><td>18.0</td><td>47.6</td><td>0.68</td><td>0.0</td></tr><tr><td>lap 3</td><td>27.9</td><td>48</td><td>64</td><td>75</td><td>38</td><td>12.0</td><td>23.4</td><td>0.67</td><td>0.0</td></tr></tbody></table></div>
 <p><strong>Yaw without roll.</strong> A turn flown on yaw alone is a pirouette: the airframe rotates, the path does not bend.</p>
 <div class="tw"><table><thead><tr><th>Segment</th><th>yaw held (s)</th><th>roll at zero (s)</th><th>share</th><th>mean km/h</th><th>p90 by speed band</th></tr></thead><tbody><tr><td>lap 1</td><td>7.6</td><td>0.9</td><td>12%</td><td>63.5</td><td>20-35: roll 0.66, yaw 0.31 / 35-max: roll 0.62, yaw 0.43</td></tr><tr><td>lap 2</td><td>8.4</td><td>0.8</td><td>10%</td><td>50.2</td><td>20-35: roll 0.33, yaw 0.70 / 35-max: roll 0.61, yaw 0.43</td></tr><tr><td>lap 3</td><td>9.2</td><td>0.8</td><td>9%</td><td>52.1</td><td>20-35: roll 0.53, yaw 0.28 / 35-max: roll 0.49, yaw 0.33</td></tr></tbody></table></div>
@@ -150,7 +208,7 @@ transition:color .12s,background .12s,border-color .12s}
 </details>
 </section>
 <hr>
-<p>Replay <code>20260828-140705_BardwellsYard_Race_3lap.xml</code> · samples in <code>flight.csv</code> · <strong>full analysis, including everything not drawn above, in <code>analysis.json</code></strong> · generated 2026-08-28 18:41 by <code>fpv_report.py</code></p></main><script>
+<p>Replay <code>20260828-140705_BardwellsYard_Race_3lap.xml</code> · samples in <code>flight.csv</code> · <strong>full analysis, including everything not drawn above, in <code>analysis.json</code></strong> · generated 2026-08-30 11:19 by <code>fpv_report.py</code></p></main><script>
 for (const b of document.querySelectorAll('.xall')) {
   b.addEventListener('click', () => {
     const want = b.getAttribute('data-open') !== '1';

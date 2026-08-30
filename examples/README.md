@@ -29,6 +29,8 @@ because the diagnosis depends on what the pilot has already been told and the
 script does not know that.
 
 Then read it against the evidence. **Lap times** shows three laps within 1.75 s
-of each other. **Circuit path** shows where the speed was carried. **Numbers**
-shows the 0–20 km/h band missing entirely from all three laps, which is the
-measurement the debrief is built on.
+of each other. **Circuit path** shows where the speed was carried.
+**Highlights and recordings** leads with the crashes and the slow spots — this
+run has neither, which is itself the result — and behind them shows the 0–20 km/h
+band missing entirely from all three laps, the measurement the debrief is built
+on.

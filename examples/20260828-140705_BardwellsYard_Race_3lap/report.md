@@ -69,7 +69,7 @@ Every lap on one map, each a different colour. Where the laps separate is a LINE
 
 </details>
 
-## Numbers
+## Highlights and recordings
 
 | Segment | s | spd med | spd p90 | spd max | tilt med | slip med | slip p90 | thr med | under 10 km/h |
 |---|---|---|---|---|---|---|---|---|---|
@@ -139,4 +139,4 @@ Every lap on one map, each a different colour. Where the laps separate is a LINE
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-28 18:41 by `fpv_report.py`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-08-30 11:19 by `fpv_report.py`

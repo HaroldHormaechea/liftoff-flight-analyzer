@@ -68,11 +68,18 @@ you curious:
   flight and coloured by speed, so you can see *where* the time went. A solid
   arrow shows where the quad was *pointing* and a dashed ray where it was
   actually *going*; when they separate, you are travelling sideways and the
-  camera is not telling you. Every slow spot gets its own short clip, magnified,
-  which is usually the moment a fault stops being an abstraction. Beside them,
-  one still map with every lap overlaid, to show where your line moved.
-- **Numbers** — speed, sideslip and throttle traces, per-corner tables, and the
-  stall analysis, with the reference material tucked into collapsible sections.
+  camera is not telling you. Beside it, one still map with every lap overlaid,
+  to show where your line moved.
+- **Highlights and recordings** — the crashes first, then every place you slowed
+  down or stopped, then the numbers behind them: speed, sideslip and throttle
+  traces and the per-corner tables, tucked into collapsible sections.
+- **The recordings.** Every crash and every slow spot has a play control on its
+  own row in the table, and it opens that moment in 3D inside the page: the
+  track around you, the props you were flying between, your path coloured by
+  speed and the quad at its true attitude. Orbit it, scrub it, play it. It is
+  usually the moment a fault stops being an abstraction — and for a crash it is
+  the difference between "the speed collapsed" and "you clipped the ramp on the
+  inside of the turn".
 
 The figures are hand-drawn SVG and the animations are plain SMIL, so there is
 nothing to install, they stay sharp at any size, and they read correctly on a

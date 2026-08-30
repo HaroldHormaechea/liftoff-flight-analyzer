@@ -3,8 +3,8 @@
 fpv_report.py - turn a Liftoff replay into an illustrated Markdown debrief.
 
 One command takes a saved replay to a folder holding the decoded CSV, a set of
-SVG figures, animated SVG replays of the lap and of every stall, and a report.md
-that embeds them all.
+SVG figures, an animated SVG replay of every lap, a playable 3D recording of
+every crash and every stall, and a report.md that embeds them all.
 
 Why this exists
 ---------------
@@ -28,6 +28,15 @@ the whole line and all the annotations are drawn underneath the animation.
 
 Figures use CSS custom properties inside a prefers-color-scheme media query, so
 one file is legible on a light and on a dark background.
+
+Recordings
+----------
+Crashes and stalls each get a recording: the 3D incident view from
+liftoff_view.py, opened from the event's own row in its table and played back in
+a window inside the page. Environment geometry is drawn when the caches for that
+environment exist and is honestly reported as missing when they do not - the
+path, the attitude and the impacts come from the replay either way. `--no-rec`
+skips them.
 
 Usage
 -----
@@ -67,6 +76,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import analyze_flight as AF
 import liftoff_replay as LR
+import liftoff_tracks as LT
+import liftoff_view as LV
 
 # ---------------------------------------------------------------------------
 # palette
@@ -853,7 +864,166 @@ def pb_context(meta, history_path):
     return out
 
 
-def findings(meta, report, names, pb):
+# ---------------------------------------------------------------------------
+# recordings
+#
+# A crash and a stall are the two moments a pilot actually wants to look at
+# again, and a table row describing one is not a look at it. So each of them
+# gets a recording: the 3D incident view - environment geometry, track props,
+# the flown path coloured by speed, the quad at its true attitude, every impact
+# marked - opened from its own row in the table and played back in a modal on
+# the page.
+#
+# The renderer is imported from liftoff_view.py, never copied. That file owns
+# the projection and the playback; this one owns where the windows are cut and
+# what the page around them looks like.
+#
+# Geometry is best-effort BY DESIGN. An environment's colliders exist only once
+# its scene bundle has been cached (liftoff_scene.py) and prop shapes only once
+# the prefabs have been (liftoff_props.py) - two of five environments flown so
+# far. Neither is needed for the part that matters most: where the quad went,
+# how it was pointing and where it stopped all come from the replay itself. A
+# recording with no geometry says so in its own footer rather than not existing.
+# ---------------------------------------------------------------------------
+
+CRASH_PAD = 3.0          # seconds either side of an impact
+NEAR_HIT_M = 6.0         # a prop further than this was not what the quad hit
+
+
+class Pool:
+    """A shared table of geometry so two recordings of one corner ship it once.
+
+    Every recording is culled independently, and incidents cluster - two impacts
+    0.7 s apart, a stall and a crash at the same hairpin - so the same few
+    hundred colliders come back again and again. Identical entries collapse to
+    one index here, which is the difference between a report of a bad session
+    weighing two megabytes and weighing six."""
+
+    def __init__(self):
+        self.items = []
+        self.index = {}
+
+    def add(self, obj):
+        key = json.dumps(obj, separators=(",", ":"), sort_keys=True)
+        if key not in self.index:
+            self.index[key] = len(self.items)
+            self.items.append(obj)
+        return self.index[key]
+
+
+def geometry_for(replay, track_dir, scenes_dir, props_path):
+    """Whatever of the environment is cached -> (track, race, scene, shapes, note).
+
+    Nothing here is fatal. `note` is the honest sentence the recording prints
+    about what it could not draw, because a view that quietly omits the wall the
+    quad hit is worse than one that says the wall is missing."""
+    missing = []
+    try:
+        track, race, _tid, _rid = LT.for_replay(track_dir, replay)
+    except Exception:
+        track = race = None
+    if track is None:
+        return (None, None, None, {},
+                "no track data for this replay - the path, the attitude and the impacts "
+                "are drawn, the environment is not")
+    env = track.get("environment") or "?"
+    scene = None
+    sp = Path(scenes_dir) / ("%s.json" % env)
+    if sp.exists():
+        scene = json.loads(sp.read_text(encoding="utf-8"))
+        if scene.get("skipped"):
+            missing.append("%s has no %s geometry" % (env, ", ".join(scene["skipped"])))
+    else:
+        missing.append("the %s scene is not cached (liftoff_scene.py)" % env)
+    shapes = {}
+    pp = Path(props_path)
+    if pp.exists():
+        shapes = json.loads(pp.read_text(encoding="utf-8"))["items"]
+    else:
+        missing.append("prop shapes are not cached (liftoff_props.py)")
+    return track, race, scene, shapes, ("; ".join(missing) if missing else "")
+
+
+def find_crashes(rows, hits, ranges, names):
+    """One record per impact: when, how hard, where in the run, and how high.
+
+    `hits` comes from the trajectory, not from the replay's isCrashed flag,
+    which reads false on flights that ended pinned against the ground - see
+    liftoff_view.impacts()."""
+    t0 = rows[0][0]
+    out = []
+    for n, i in enumerate(hits, 1):
+        seg = next((names[k] for k, (a, b) in enumerate(ranges) if a <= i < b), "-")
+        out.append({
+            "n": n,
+            "index": i,
+            "t": round(rows[i][0] - t0, 1),
+            "segment": seg,
+            "entry_kmh": round(rows[max(0, i - 1)][16], 1),
+            "min_kmh": round(rows[i][16], 1),
+            "drop_kmh": round(rows[max(0, i - 1)][16] - rows[i][16], 1),
+            "height_m": round(rows[i][2], 2),
+            # Two seconds later. The number that separates a clip that cost a
+            # moment from one that ended the run.
+            "after_kmh": round(rows[min(len(rows) - 1, i + 20)][16], 1),
+            "hit": None,
+        })
+    return out
+
+
+def crash_id(c):
+    return "crash-%d" % c["n"]
+
+
+def stall_id(k, i):
+    return "stall-%d-%d" % (k + 1, i)
+
+
+def build_recordings(rows, hits, crashes, report, names, geo, track_dir, dt,
+                     radius, stall_pad, crash_pad=CRASH_PAD):
+    """A payload per crash and per stall, all sharing one pool of geometry."""
+    track, race, scene, shapes, note = geo
+    colliders, props = Pool(), Pool()
+    items = {}
+
+    def add(rec_id, title, i0, i1, focus):
+        data = LV.build(rows, i0, i1, focus=focus, radius=radius, track_dir=track_dir,
+                        track=track, race=race, scene=scene, shapes=shapes, hits=hits,
+                        note=note)
+        found = data["props"]
+        data["title"] = title
+        data["colliders"] = [colliders.add(c) for c in data["colliders"]]
+        data["props"] = [props.add(p) for p in found]
+        items[rec_id] = data
+        return found
+
+    half = max(1, int(round(crash_pad / dt)))
+    for c in crashes:
+        i = c["index"]
+        found = add(crash_id(c),
+                    "%s - impact at %.1f s, %.0f to %.0f km/h"
+                    % (c["segment"], c["t"], c["entry_kmh"], c["min_kmh"]),
+                    max(0, i - half), min(len(rows), i + half + 1), i)
+        # What it hit, when the track data says anything at all. Solid props
+        # only: a checkpoint volume and a pit trigger are flown through.
+        near = [(math.dist(p["p"], rows[i][1:4]), p) for p in found if p["k"] == "prop"]
+        if near:
+            d, p = min(near, key=lambda pair: pair[0])
+            if d <= NEAR_HIT_M:
+                c["hit"] = {"item": p["n"], "dist_m": round(d, 1)}
+
+    pad = max(1, int(round(stall_pad / dt)))
+    for k, e in enumerate(report):
+        for i, st in enumerate(e["stalls"], 1):
+            s0, s1 = st["index"]
+            add(stall_id(k, i),
+                "%s, stall %d at %.1f s - %s" % (names[k], i, st["t"], st["verdict"]),
+                max(0, s0 - pad), min(len(rows), s1 + pad + 1), (s0 + s1) // 2)
+
+    return {"geo": colliders.items, "props": props.items, "items": items}
+
+
+def findings(meta, report, names, pb, crashes=()):
     """Mechanical observations: true by arithmetic, no judgement.
 
     Kept separate from the Debrief on purpose. A generated sentence can say a
@@ -861,6 +1031,15 @@ def findings(meta, report, names, pb):
     about it last session, which is the whole difference between coaching and
     nagging."""
     out = []
+    if crashes:
+        worst = max(crashes, key=lambda c: c["drop_kmh"])
+        what = (", into %s %.1f m away" % (worst["hit"]["item"], worst["hit"]["dist_m"])
+                if worst["hit"] else "")
+        out.append("**%d impact%s**, at %s. The hardest took %.0f km/h out in a tenth of "
+                   "a second - %.0f to %.0f km/h, %.1f m up%s."
+                   % (len(crashes), "" if len(crashes) == 1 else "s",
+                      ", ".join("%.1f s" % c["t"] for c in crashes), worst["drop_kmh"],
+                      worst["entry_kmh"], worst["min_kmh"], worst["height_m"], what))
     slow = sum(e["slow_seconds"] for e in report)
     dur = sum(e["duration_s"] for e in report)
     stalls = [s for e in report for s in e["stalls"]]
@@ -980,7 +1159,18 @@ def details(summary, lines, open_=False):
              "<summary>%s</summary>" % summary, ""] + lines + ["</details>", ""])
 
 
-def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrief=None):
+def rec_cell(rec_id, rec_ids):
+    """The recording link that sits on an event's own row.
+
+    A plain Markdown link, so report.md stays Markdown and stays honest: the
+    recording lives in the HTML copy and the link says so. md_inline turns the
+    same link into the control that opens the modal."""
+    return ("[▶ View recording](report.html#rec-%s)" % rec_id
+            if rec_id in rec_ids else "-")
+
+
+def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrief=None,
+                 crashes=(), rec_ids=()):
     """The reader's order, which is not the analysis order.
 
     The debrief comes first because it is the answer; everything after it is the
@@ -1011,7 +1201,7 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
     L += ["## Debrief", "", debrief or DEBRIEF_STUB, ""]
 
     L += ["## Data analysis", ""]
-    L += ["- " + f for f in findings(meta, report, names, pb)]
+    L += ["- " + f for f in findings(meta, report, names, pb, crashes)]
     L += [""]
 
     L += ["## Lap times", "", "![Lap times](%s)" % rel(figs["timeline"]), ""]
@@ -1043,7 +1233,50 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
                           "separate is a LINE difference. No change of stick technique "
                           "moves a line - only knowing the track does.", ""])
 
-    L += ["## Numbers", ""]
+    # The section leads with the moments and ends with the reference tables, in
+    # the order a pilot asks for them: what went wrong, then where it went
+    # slowly, then the numbers behind both. The crashes and the stalls open on
+    # arrival - they are the point of the section, and each row carries the
+    # control that plays it - while everything below them stays collapsed.
+    L += ["## Highlights and recordings", ""]
+
+    if crashes:
+        body = [md_table(["Segment", "#", "t", "km/h in", "km/h after", "lost", "height m",
+                          "2 s later", "hit", "recording"],
+                         [[c["segment"], c["n"], "%.1f" % c["t"], "%.1f" % c["entry_kmh"],
+                           "%.1f" % c["min_kmh"], "**%.0f**" % c["drop_kmh"],
+                           "%.2f" % c["height_m"], "%.1f" % c["after_kmh"],
+                           ("%s, %.1f m" % (c["hit"]["item"], c["hit"]["dist_m"]))
+                           if c["hit"] else "-",
+                           rec_cell(crash_id(c), rec_ids)] for c in crashes]), "",
+                "An impact is read from the trajectory, not from the replay's `isCrashed` "
+                "flag: a run that ends pinned against the ground at full throttle records "
+                "that flag as false. Losing 20 km/h or more inside one 0.1 s sample is not "
+                "something braking can do. `hit` is the nearest SOLID track prop, and is "
+                "blank when the track data for this environment has not been extracted - "
+                "not a claim that the quad hit nothing.", ""]
+        L += details("Crashes (%d)" % len(crashes), body, open_=True)
+
+    stalls = [(k, i, st) for k, e in enumerate(report) for i, st in enumerate(e["stalls"], 1)]
+    if stalls:
+        body = [md_table(["Segment", "#", "t", "dur", "min km/h", "turn", "retrace", "net",
+                          "verdict", "because", "line", "recording"],
+                         [[names[k], i, "%.1f" % st["t"], "%.1f" % st["duration_s"],
+                           "%.1f" % st["min_kmh"],
+                           "%+d" % st["turn_deg"] if st["turn_deg"] is not None else "-",
+                           "%.1f" % st["retrace_m"] if st["retrace_m"] is not None else "-",
+                           "%.1f" % st["net_m"] if st["net_m"] is not None else "-",
+                           "**%s**" % st["verdict"], st["why"],
+                           "off line by %.1f m" % st["other_lap"]["dist_m"]
+                           if st["off_line"] else "",
+                           rec_cell(stall_id(k, i), rec_ids)] for k, i, st in stalls]), "",
+                "`overrun` - the path reverses and retraces itself. `corner` - another lap "
+                "turns hard at the same coordinates, so the track asked for it. "
+                "`hesitation` - another lap goes straight through there at speed, so "
+                "nothing there needed a stop. A trailing `?` means there was only one lap: "
+                "no cross-lap evidence, and the verdict rests on the reversal test alone.", ""]
+        L += details("Stalls (%d)" % len(stalls), body, open_=True)
+
     rows = [[names[k], "%.1f" % e["duration_s"], e["speed_median"], e["speed_p90"],
              e["speed_max"], e["tilt_median"], "%.1f" % e["sideslip_median"],
              "%.1f" % e["sideslip_p90"], "%.2f" % e["throttle_median"],
@@ -1078,27 +1311,6 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
                             c["radius_m"], "%.2f" % c["throttle_in"],
                             "%+.2f" % c["throttle_delta"]] for k, i, c in corners]), ""]
         L += details("Corners (%d)" % len(corners), body)
-
-    stalls = [(k, i, st) for k, e in enumerate(report) for i, st in enumerate(e["stalls"], 1)]
-    if stalls:
-        body = [md_table(["Segment", "#", "t", "dur", "min km/h", "turn", "retrace", "net",
-                          "verdict", "because", "line"],
-                         [[names[k], i, "%.1f" % st["t"], "%.1f" % st["duration_s"],
-                           "%.1f" % st["min_kmh"],
-                           "%+d" % st["turn_deg"] if st["turn_deg"] is not None else "-",
-                           "%.1f" % st["retrace_m"] if st["retrace_m"] is not None else "-",
-                           "%.1f" % st["net_m"] if st["net_m"] is not None else "-",
-                           "**%s**" % st["verdict"], st["why"],
-                           "off line by %.1f m" % st["other_lap"]["dist_m"]
-                           if st["off_line"] else ""] for k, i, st in stalls]), "",
-                "`overrun` - the path reverses and retraces itself. `corner` - another lap "
-                "turns hard at the same coordinates, so the track asked for it. "
-                "`hesitation` - another lap goes straight through there at speed, so "
-                "nothing there needed a stop. A trailing `?` means there was only one lap: "
-                "no cross-lap evidence, and the verdict rests on the reversal test alone.", ""]
-        for label, path, rate in anims.get("stalls", []):
-            body += ["**%s**" % label, "", "![%s](%s)" % (label, rel(path)), ""]
-        L += details("Stalls (%d)" % len(stalls), body)
 
     # A real no-break space, not &nbsp;. This line is Markdown prose, so it goes
     # through md_inline, and esc() would turn the entity into visible text. The
@@ -1208,7 +1420,88 @@ transition:color .12s,background .12s,border-color .12s}
 /* Paper has no tabs: print every panel, in order, and drop the nav. */
 @media print{.tabs{display:none!important}.js .panel{display:block!important}
 .panel>h2:first-child{border-top:1px solid var(--line);padding-top:22px;margin-top:52px}}
+
+/* Recordings. The control sits in the event's own row - the moment and the way
+   to watch it on one line - and opens a window inside the page rather than a
+   browser one: a real pop-up loses the report's palette, its scroll position
+   and, in most browsers, the click that asked for it. */
+a.rec{display:inline-flex;flex-direction:column;align-items:center;gap:2px;
+text-decoration:none;color:var(--acc);padding:3px 8px;border-radius:7px;line-height:1.15}
+a.rec:hover{background:var(--pan)}
+a.rec svg{display:block}
+a.rec span{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+color:var(--mut)}
+a.rec:hover span{color:var(--acc)}
+a.rec:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+th.rc,td.rc{position:sticky;right:0;text-align:center;background:var(--bg);
+box-shadow:-9px 0 9px -9px rgba(0,0,0,.35)}
+tr:hover td.rc{background:var(--pan)}
+.recwrap{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+justify-content:center;padding:24px}
+.recwrap[hidden]{display:none}
+.recdim{position:absolute;inset:0;background:rgba(9,11,14,.62)}
+.recwin{position:relative;display:flex;flex-direction:column;width:min(1080px,100%);
+max-height:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
+.recbar{display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;
+background:var(--pan);border-bottom:1px solid var(--line)}
+.recbar h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--fg);
+text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;
+text-overflow:ellipsis}
+.recx{appearance:none;-webkit-appearance:none;border:1px solid transparent;
+background:transparent;color:var(--mut);font:inherit;font-size:15px;line-height:1;
+padding:5px 9px;border-radius:7px;cursor:pointer}
+.recx:hover{background:var(--bg);border-color:var(--line);color:var(--fg)}
+/* The stage keeps its own dark ground in both themes. It is a view through a
+   camera, not a panel of the document, and the geometry colours were chosen
+   against this background. */
+.recstage{position:relative;background:#0e1116;height:min(60vh,560px)}
+.recstage canvas{display:block;width:100%;height:100%;cursor:grab}
+.recstage canvas.drag{cursor:grabbing}
+.rechud,.reclegend{position:absolute;top:10px;pointer-events:none;color:#c9d1d9;
+text-shadow:0 1px 3px #000}
+.rechud{left:13px;font-size:12px}
+.reclegend{right:13px;text-align:right;font-size:11px;line-height:1.65}
+.reclegend i{display:inline-block;width:9px;height:9px;margin-right:5px;
+border-radius:2px;vertical-align:middle}
+.recctl{display:flex;align-items:center;gap:10px;padding:10px 14px;
+border-top:1px solid var(--line);background:var(--pan)}
+.recctl input[type=range]{flex:1;min-width:120px;accent-color:var(--acc)}
+.recbtn{appearance:none;-webkit-appearance:none;border:1px solid var(--line);
+background:var(--bg);color:var(--fg);font:inherit;font-size:13px;padding:5px 12px;
+border-radius:7px;cursor:pointer}
+.recbtn:hover{border-color:var(--acc);color:var(--acc)}
+.rectime{font-variant-numeric:tabular-nums;color:var(--mut);font-size:13px;min-width:92px}
+.recnote{margin:0;padding:9px 14px 12px;background:var(--pan);color:var(--mut);
+font-size:12px;border-top:1px solid var(--line)}
+.recnote[hidden]{display:none}
+@media (max-width:640px){.recctl{flex-wrap:wrap}.recstage{height:46vh}
+.reclegend{display:none}}
+@media print{.recwrap{display:none!important}}
 """
+
+
+REC_ICON = ('<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">'
+            '<circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" '
+            'stroke-width="1.5"/><path d="M8.3 6.4 14 10l-5.7 3.6Z" fill="currentColor"/>'
+            "</svg>")
+
+REC_HREF = re.compile(r"^(?:report\.html)?#rec-(.+)$")
+
+
+def md_link(text, href):
+    """A Markdown link. A link to a recording becomes the control that plays it.
+
+    The .md and the .html carry the same construct, which is the rule the whole
+    renderer follows: report.md keeps a link that says the recording is in the
+    HTML copy, and the HTML copy turns that link into the play control on the
+    event's row."""
+    m = REC_HREF.match(href)
+    if not m:
+        return '<a href="%s">%s</a>' % (href, text)
+    label = text.lstrip("▶ ").strip() or "View recording"
+    return ('<a class="rec" href="#rec-%s" data-rec="%s" title="Play this recording">'
+            "%s<span>%s</span></a>" % (m.group(1), m.group(1), REC_ICON, label))
 
 
 def md_inline(t):
@@ -1232,6 +1525,8 @@ def md_inline(t):
     t = re.sub(r"`([^`]+)`", lambda m: hold("<code>%s</code>" % m.group(1)), t)
     t = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)",
                lambda m: hold('<img src="%s" alt="%s">' % (m.group(2), m.group(1))), t)
+    t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
+               lambda m: hold(md_link(m.group(1), m.group(2))), t)
     t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
     t = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", t)
     t = re.sub(r"_([^_]+)_", r"<em>\1</em>", t)
@@ -1385,10 +1680,101 @@ def add_tabs(out):
     return new + out[end:]
 
 
+# One window, reused. Only one recording is ever being watched, and a page that
+# builds a canvas per incident pays for every incident on load - a bad session
+# has six - to show at most one of them.
+REC_MODAL = """
+<div class="recwrap" id="recmodal" hidden>
+  <div class="recdim" data-close></div>
+  <div class="recwin" role="dialog" aria-modal="true" aria-labelledby="rectitle">
+    <div class="recbar">
+      <h3 id="rectitle"></h3>
+      <button class="recx" type="button" data-close aria-label="Close recording"
+              title="Close">&#10005;</button>
+    </div>
+    <div class="recstage">
+      <canvas data-fpv="canvas"></canvas>
+      <div class="rechud">drag to orbit &middot; wheel to zoom<br>
+        <span data-fpv="readout"></span></div>
+      <div class="reclegend">
+        <i style="background:#5b6b7f"></i>scene collider<br>
+        <i style="background:#e3b341"></i>solid track prop<br>
+        <i style="background:#4dd0c7"></i>route checkpoint<br>
+        <i style="background:#3a4a5c"></i>pit trigger (not solid)<br>
+        <i style="background:#f0524d"></i>impact
+      </div>
+    </div>
+    <div class="recctl">
+      <button class="recbtn" type="button" data-fpv="play">Play</button>
+      <input data-fpv="scrub" type="range" min="0" max="0" step="1" value="0"
+             aria-label="Playback position">
+      <span class="rectime" data-fpv="time"></span>
+      <button class="recbtn" type="button" data-fpv="gates">Show route</button>
+      <button class="recbtn" type="button" data-fpv="triggers">Show triggers</button>
+    </div>
+    <p class="recnote" hidden></p>
+  </div>
+</div>
+"""
+
+REC_JS = """
+(function () {
+  const modal = document.getElementById('recmodal');
+  if (!modal || typeof FPV_REC === 'undefined') return;
+  const title = document.getElementById('rectitle');
+  const note = modal.querySelector('.recnote');
+  let viewer = null, opener = null;
+
+  /* Geometry is pooled across recordings and referenced by index, so the
+     payload is rebuilt into the shape the viewer expects on the way in. */
+  function payload(id) {
+    const it = FPV_REC.items[id];
+    if (!it) return null;
+    const D = Object.assign({}, it);
+    D.colliders = it.colliders.map(i => FPV_REC.geo[i]);
+    D.props = it.props.map(i => FPV_REC.props[i]);
+    return D;
+  }
+  function teardown() {
+    if (viewer) { viewer.destroy(); viewer = null; }
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+  function close() {
+    teardown();
+    if (opener) { opener.focus(); opener = null; }
+  }
+  function open(id, from) {
+    const D = payload(id);
+    if (!D) return;
+    teardown();
+    opener = from || null;
+    title.textContent = D.title || 'Recording';
+    note.textContent = D.note ? 'Not drawn: ' + D.note + '.' : '';
+    note.hidden = !D.note;
+    modal.hidden = false;
+    // The page behind must not scroll under the window.
+    document.body.style.overflow = 'hidden';
+    viewer = fpvViewer(modal, D);
+    modal.querySelector('.recx').focus();
+  }
+
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[data-rec]');
+    if (a) { e.preventDefault(); open(a.dataset.rec, a); return; }
+    if (!modal.hidden && e.target.closest('[data-close]')) close();
+  });
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.hidden) { e.preventDefault(); close(); }
+  });
+})();
+"""
+
+
 ALIGN_RE = re.compile(r"^:?-{3,}:?$")
 
 
-def md_to_html(md, title):
+def md_to_html(md, title, recs=None):
     out, rows, para = [], [], []
     align = []
 
@@ -1403,12 +1789,19 @@ def md_to_html(md, title):
         head, body = rows[0], rows[2:]          # rows[1] is the |---| separator
         al = [(' style="text-align:right"' if c.endswith(":") and not c.startswith(":")
                else "") for c in rows[1]] if len(rows) > 1 else []
-        pad = lambda i: al[i] if i < len(al) else ""
+        # An incident table is a dozen columns wide and scrolls sideways inside
+        # its own box, so a recording column left to sit at the far end of it is
+        # a control the reader has to go looking for. It is pinned to the right
+        # edge instead, and stays on the event's row wherever the row is scrolled
+        # to. Found by column, not by cell, so an event with no recording keeps
+        # the same pinned cell rather than punching a hole in it.
+        rc = next((i for i, c in enumerate(head) if c.strip().lower() == "recording"), None)
+        attrs = lambda i: (' class="rc"' if i == rc else "") + (al[i] if i < len(al) else "")
         out.append('<div class="tw"><table><thead><tr>%s</tr></thead><tbody>%s'
                    "</tbody></table></div>"
-                   % ("".join("<th%s>%s</th>" % (pad(i), md_inline(c))
+                   % ("".join("<th%s>%s</th>" % (attrs(i), md_inline(c))
                               for i, c in enumerate(head)),
-                      "".join("<tr>%s</tr>" % "".join("<td%s>%s</td>" % (pad(i), md_inline(c))
+                      "".join("<tr>%s</tr>" % "".join("<td%s>%s</td>" % (attrs(i), md_inline(c))
                                                       for i, c in enumerate(r))
                               for r in body)))
         rows.clear()
@@ -1454,14 +1847,30 @@ def md_to_html(md, title):
     flush_para()
     flush_table()
     out = add_tabs(add_expand_all(out))
+
+    # The recordings ride in the page rather than in files beside it. A report
+    # is opened over file://, where fetch() of a sibling JSON is blocked, so
+    # anything the page needs on click has to already be in the page.
+    #
+    # Built by concatenation, not by %-formatting: the viewer's playback loop
+    # contains a modulo, and one stray %d in a script is a silent MISSING
+    # renderer rather than an error anyone would see.
+    body = ["<main>", "\n".join(out), "</main>"]
+    scripts = ["<script>" + EXPAND_JS + "</script>", "<script>" + TAB_JS + "</script>"]
+    if recs and recs.get("items"):
+        body.append(REC_MODAL)
+        scripts.append("<script>const FPV_REC = "
+                       + json.dumps(recs, separators=(",", ":")) + ";</script>")
+        scripts.append("<script>" + LV.VIEWER_JS + "</script>")
+        scripts.append("<script>" + REC_JS + "</script>")
     # The .js flag is set in <head>, before the body paints, so the browser
     # never shows the whole report for a frame and then collapses it to one tab.
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>%s</title><script>document.documentElement.className='js'</script>"
-            "<style>%s</style></head><body><main>%s</main>"
-            "<script>%s</script><script>%s</script></body></html>"
-            % (esc(title), HTML_CSS, "\n".join(out), EXPAND_JS, TAB_JS))
+            "<title>" + esc(title) + "</title>"
+            "<script>document.documentElement.className='js'</script>"
+            "<style>" + HTML_CSS + "</style></head><body>"
+            + "".join(body) + "".join(scripts) + "</body></html>")
 
 # ---------------------------------------------------------------------------
 
@@ -1504,7 +1913,17 @@ def main():
                          "untimed time either side of the laps must contain to "
                          "earn its own segment (default 5). Grid time fails this.")
     ap.add_argument("--stall-pad", type=float, default=4.0,
-                    help="seconds of context either side of a stall animation (default 4)")
+                    help="seconds of context either side of a stall recording (default 4)")
+    ap.add_argument("--track-dir", default="trackdata",
+                    help="track, scene and prop caches for the recordings "
+                         "(default trackdata, relative to the working directory)")
+    ap.add_argument("--scenes", help="scene cache folder (default: <track-dir>/scenes)")
+    ap.add_argument("--props", help="prop shape table (default: <track-dir>/props.json)")
+    ap.add_argument("--rec-radius", type=float, default=25.0,
+                    help="metres of environment geometry around a recording (default 25)")
+    ap.add_argument("--no-rec", action="store_true",
+                    help="skip the crash and stall recordings; the tables stay, the "
+                         "play controls do not")
     args = ap.parse_args()
 
     path = Path(args.replay) if args.replay else None
@@ -1599,7 +2018,7 @@ def main():
     if fig_corners(report, names, cf, "Corner scorecard"):
         figs["corners"] = cf
 
-    anims = {"laps": [], "stalls": []}
+    anims = {"laps": []}
     if not args.no_anim:
         for k, (a, b) in enumerate(ranges):
             p = assets / ("anim_%s.svg" % names[k].replace(" ", ""))
@@ -1608,28 +2027,34 @@ def main():
                             args.anim_max, args.anim_frames, args.cam_span)
             if rate:
                 anims["laps"].append((p, rate))
-        pad = max(1, int(round(args.stall_pad / dt)))
-        for k, e in enumerate(report):
-            for i, st in enumerate(e["stalls"], 1):
-                s0, s1 = st["index"]
-                p = assets / ("anim_stall_%d_%d.svg" % (k + 1, i))
-                label = "%s, stall %d at %.1f s - %s" % (names[k], i, st["t"], st["verdict"])
-                rate = fig_anim(data, max(0, s0 - pad), min(len(data), s1 + pad), p,
-                                label, st["why"], vref, args.anim_max, args.anim_frames,
-                                cam_span_m=22.0)
-                if rate:
-                    anims["stalls"].append((label, p, rate))
+
+    # The two moments worth watching again, each recorded from its own row.
+    # A stall used to get a flat SVG clip printed under the table; the recording
+    # answers the same question in the place the reader asks it, and answers the
+    # one the clip could not - what was actually around the quad.
+    hits = LV.impacts(rows)
+    crashes = find_crashes(rows, hits, ranges, names)
+    recs = {"geo": [], "props": [], "items": {}}
+    if not args.no_rec and (crashes or any(e["stalls"] for e in report)):
+        scenes = args.scenes or str(Path(args.track_dir) / "scenes")
+        props = args.props or str(Path(args.track_dir) / "props.json")
+        geo = geometry_for(path, args.track_dir, scenes, props)
+        recs = build_recordings(rows, hits, crashes, report, names, geo, args.track_dir,
+                                dt, args.rec_radius, args.stall_pad)
+        if geo[4]:
+            print("  recordings: %s" % geo[4])
 
     md_path = outdir / "report.md"
     kept = None if args.reset_debrief else existing_debrief(md_path)
-    write(md_path, build_report(meta, data, ranges, names, report, pb, figs, anims, rel, kept))
+    write(md_path, build_report(meta, data, ranges, names, report, pb, figs, anims, rel,
+                                kept, crashes, set(recs["items"])))
     if kept:
         print("  kept the existing Debrief section")
     html_path = outdir / "report.html"
     if not args.no_html:
         write(html_path, md_to_html(md_path.read_text(encoding="utf-8"),
                                     "%s - %s" % (meta.get("environment") or "?",
-                                                 meta.get("gamemode") or "?")))
+                                                 meta.get("gamemode") or "?"), recs))
     # The full analysis, deliberately a superset of the report.
     #
     # report.md and report.html are an argument made to a person, so they leave
@@ -1657,20 +2082,28 @@ def main():
                                and names[k].startswith("lap"))}
             for k, (a, b) in enumerate(ranges)],
         "segments": report,
-        "findings": findings(meta, report, names, pb),
+        "findings": findings(meta, report, names, pb, crashes),
+        "crashes": crashes,
+        "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "
+                            "replay's isCrashed flag is not used, it reads false on "
+                            "flights that ended pinned against the ground"
+                            % LV.IMPACT_DROP_KMH),
+        "recordings": {"in": "report.html, opened from the crash and stall tables",
+                       "ids": sorted(recs["items"]),
+                       "titles": {i: d.get("title") for i, d in recs["items"].items()}},
         "personal_bests": pb,
         "figures": {k: (rel(v) if isinstance(v, Path)
                         else {str(i): rel(p) for i, p in v.items()})
                     for k, v in figs.items()},
-        "animations": {"laps": [rel(p) for p, _ in anims["laps"]],
-                       "stalls": [{"label": lb, "file": rel(p)}
-                                  for lb, p, _ in anims["stalls"]]},
+        "animations": {"laps": [rel(p) for p, _ in anims["laps"]]},
         "not_in_report": [
             "per-sample trajectory, attitude and stick positions: flight.csv",
             "tilt and stick traces are collapsed in the report; the numbers are "
             "in segments[].tilt_* and segments[].yaw_only",
-            "corner and stall tables are collapsed in the report; full detail in "
-            "segments[].corners and segments[].stalls",
+            "the corner table is collapsed in the report; full detail in "
+            "segments[].corners, and every stall in segments[].stalls",
+            "the recordings are in report.html only; the windows they cut are "
+            "described by crashes[] and segments[].stalls",
         ],
     }
     with open(outdir / "analysis.json", "w", encoding="utf-8") as fh:
@@ -1680,8 +2113,8 @@ def main():
     print("        %s" % (outdir / "analysis.json"))
     if not args.no_html:
         print("        %s" % html_path)
-    print("  %d figures, %d animations, %d segment(s)"
-          % (len(figs) - 1, len(anims["laps"]) + len(anims["stalls"]), len(ranges)))
+    print("  %d figures, %d animations, %d segment(s), %d recording(s)"
+          % (len(figs) - 1, len(anims["laps"]), len(ranges), len(recs["items"])))
 
     # The report is the deliverable, so show it rather than printing a path and
     # trusting someone to follow it. Failure here is never worth aborting on:

@@ -259,7 +259,35 @@ Archive names do not resemble the pinned filenames because `liftoff_replay.py` n
 
 **Why the third replay is mandatory.** The pinned "crash on 3rd" replay produces **zero impacts** — detection requires ≥20 km/h lost in one 0.1 s sample (`liftoff_view.IMPACT_DROP_KMH`) and that flight never drops that fast. With the pinned pair alone, `liftoff_scene.py`'s `cull`, the geometry `Pool`, index-referenced colliders and the whole incident-recording assembly are **never executed** — precisely the code commits B4 and D touch most. The use case's own words: "A migration verified only on a clean flight has not been verified."
 
-**Commit F canary.** For the E-vs-F pass only, add a fourth replay: `03 - Pipeline - 00_00_000 - 2026-08-30.xml` (no `- crash on 3rd` suffix), whose single impact measures **20.2 km/h against the 20.0 threshold**. It is a knife-edge case and therefore a poor A–E control, but it is the best available probe for exactly the categorical flip commit F risks. If any classification is going to change, it changes here first.
+**The fourth replay — the canary — is required in BOTH passes, and it is the most valuable of the four.** `replays/20260830-122843_Rustline_Race_nolap.xml` (from `03 - Pipeline - 00_00_000 - 2026-08-30.xml`, *without* the `- crash on 3rd` suffix). It was added as a knife-edge probe for commit F, but capturing its baseline revealed a second coverage hole of the same shape as the crash-path one:
+
+> **It is the only replay of the four that exercises the stall decision table at all.** It produces **10 stalls — 3 corner, 5 hesitation, 2 overrun**, hitting all three verdicts. The other three replays produce **zero** stall recordings between them. Without it, the overrun/corner/hesitation classifier — which `PROJECT_BRIEF.md` calls the project's core claim, and which §4 warns is exactly what a 7th-digit shift can flip — was **completely dark in both passes**, not merely in F.
+
+It is also the first replay in the set where the geometry `Pool`'s clustered-incident deduplication does real work (8,748 colliders and 27 props pooled from 17,765 and 98 summed across 11 recordings — a 2.0× dedup), which is precisely what commit B4 moves. Its scene resolves (Rustline is cached; the "no mesh, terrain geometry" line is the cache's normal partial skip, not a miss), its `hit: null` branch exercises the no-prop-in-range path, and its `report.html` is 1,022,679 bytes — 26× the pinned crash replay's.
+
+**Baseline stall verdicts, for attributing any flip in the E-vs-F pass:**
+
+| # | t (s) | verdict | retrace | turn | min |
+|---|---|---|---|---|---|
+| 1 | 29.0 | corner? | 10.9 | +132 | 8.8 |
+| 2 | 35.2 | hesitation? | 12.9 | — | 5.2 |
+| 3 | 36.8 | hesitation? | 0.3 | — | 7.5 |
+| 4 | 43.9 | overrun | 0.1 | — | — |
+| 5 | 52.0 | corner? | 35.7 | — | 6.7 |
+| 6 | 70.3 | corner? | 8.5 | | |
+| 7 | 86.9 | hesitation? | 6.8 | | |
+| 8 | 98.4 | hesitation? | 1.2 | | |
+| 9 | 100.7 | hesitation? | 3.0 | | |
+| 10 | 105.5 | overrun | 0.1 | | 6.2 |
+
+**Check these two values before anything else in the E-vs-F pass.** QA ranked every classified value across all four baselines by its margin to the threshold it is compared against; the two tightest are both here:
+
+- **Margin 0.00 — stall #9 (t=100.7).** `retrace_m` serialises as exactly `3.0` against the `3.0` retrace threshold. `analysis.json` rounds `retrace_m` to one decimal, so the true unrounded margin is unknown but is **at most 0.05**. Tighter than the crash this replay was chosen for. Its verdict is `hesitation?` with `why="no cross-lap evidence"` and `turn_deg` null, so a flip moves it across the corner/hesitation boundary.
+- **Margin 0.20 — crash #1 (t=115.2).** Drop 20.2 vs `IMPACT_DROP_KMH` 20.0. A flip here deletes the impact, takes `crash-1` and its recording with it, drops the recording count from 11 to 10, and re-pools the geometry.
+
+Next tightest is 1.10 (the Woodpecker crash, 21.1 vs 20.0); everything else is 1.2 or wider.
+
+**⚠ Filename trap.** The pinned crash replay and the canary archive to names differing only in a 6-digit time field — `20260830-125608_Rustline_Race_nolap.xml` (pinned, 0 impacts) versus `20260830-122843_Rustline_Race_nolap.xml` (canary, 1 impact + 10 stalls). Misreading one for the other silently swaps the input and invalidates the comparison with no error. `COMMANDS.txt` carries a CAUTION block naming both; copy paths from that file rather than retyping.
 
 **Measured noise floor.** The same command run twice against unchanged code, into two different `-o` directories, differs **only** in `analysis.json`'s `generated` (second granularity) and the `report.md` / `report.html` footer timestamp (minute granularity). **Every SVG asset and `flight.csv` were byte-identical.** Anything else that differs is a regression.
 

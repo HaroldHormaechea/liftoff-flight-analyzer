@@ -210,6 +210,7 @@ def blueprints(track_root):
     for item in listed if listed is not None else []:
         pos, rot, scale = item.find("position"), item.find("rotation"), item.find("scale")
         instance = int(_text(item, "instanceID", "0"))
+        action = item.find("action")
         out[instance] = {
             "id": instance,
             "type": (item.get(XSI_TYPE) or "").replace("TrackBlueprint", "") or "?",
@@ -218,7 +219,62 @@ def blueprints(track_root):
             "yaw": axis(rot, "y"),
             "aperture": ([abs(axis(scale, "x")), abs(axis(scale, "y"))]
                          if scale is not None else None),
+            # The full three-axis scale, kept alongside `aperture` rather than
+            # replacing it: a gate is read as an opening and only needs width and
+            # height, but a trigger VOLUME is a solid a point is tested against
+            # and the depth is half the answer.
+            "scale": ([abs(axis(scale, "x")), abs(axis(scale, "y")), abs(axis(scale, "z"))]
+                      if scale is not None else None),
+            # An Action item's <action> child says what the volume DOES, and it
+            # is the only thing that separates a pit from a text popup. The
+            # itemID does not: TriggerBox_ShowText and TriggerBox_ChargeBattery
+            # are the same prefab family.
+            "action": ((action.get(XSI_TYPE) or "").replace("Action", "") or None
+                       if action is not None else None),
         }
+    return out
+
+
+
+# The two things a pilot is allowed to stop for. Anything else an Action volume
+# does - ShowText is the only other one shipped - is not a pit and must not be
+# counted as one, or every tutorial caption becomes a pit stop.
+PIT_ACTIONS = {"ChargeBattery": "recharge", "RepairPropellers": "repair"}
+
+
+def pit_volumes(track_root):
+    """The repair and recharge volumes of one track, as testable geometry.
+
+    These matter for one reason: a quad SITTING ON THE GROUND inside one of them
+    is servicing, not crashed, and the impact that put it there was a landing.
+    Scoring that as a crash both invents a fault the pilot does not have and
+    hides the pit stop, which is a real cost on the clock and belongs in the
+    report as its own line.
+
+    Two prefab families carry the actions, and the itemID prefix is what says
+    which shape to test a point against:
+
+      TriggerBox_*     a box. The prefab is unit-sized, so `scale` IS the full
+                       extent in metres and the half-extents are half of it. It
+                       is rotated by the item's yaw, like everything else on a
+                       track, so containment is tested in the box's own frame.
+      TriggerSphere_*  a sphere of diameter `scale.x`, so radius is half of it.
+                       The three components are equal on every one shipped; the
+                       x component is taken and the others ignored rather than
+                       inventing an ellipsoid that the game does not have.
+
+    The returned dicts are deliberately sim-agnostic - shape, centre, yaw, size -
+    because the containment test lives in common/geometry.py and must not learn
+    what a Liftoff blueprint is."""
+    out = []
+    for item in blueprints(track_root).values():
+        kind = PIT_ACTIONS.get(item.get("action") or "")
+        if kind is None or not item.get("scale"):
+            continue
+        name = item.get("item") or ""
+        shape = "sphere" if name.startswith("TriggerSphere") else "box"
+        out.append({"id": item["id"], "kind": kind, "item": name, "shape": shape,
+                    "pos": item["pos"], "yaw": item["yaw"], "size": item["scale"]})
     return out
 
 

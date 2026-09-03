@@ -70,6 +70,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fpv_review.common import analysis
+from fpv_review.common import geometry
 from fpv_review.common import incident_view
 
 # ---------------------------------------------------------------------------
@@ -87,9 +88,11 @@ SEP = "  ·  "          # runs of plain spaces collapse in SVG text
 
 CSS = """
 :root{--bg:#ffffff;--pan:#f4f6f8;--fg:#1b1d21;--mut:#6b7178;--grid:#dfe3e8;
---warn:#c8384b;--ok:#1f8a7d;--acc:#3f6fd0;--halo:#ffffff}
+--warn:#c8384b;--ok:#1f8a7d;--acc:#3f6fd0;--halo:#ffffff;
+--charge:#1f8a45;--repair:#7b3fcf;--crash:#d1303f}
 @media (prefers-color-scheme:dark){:root{--bg:#14161a;--pan:#1c1f25;--fg:#e7e9ec;
---mut:#8b9199;--grid:#2b3037;--warn:#ef6d7d;--ok:#4fbfae;--acc:#7aa2f7;--halo:#14161a}}
+--mut:#8b9199;--grid:#2b3037;--warn:#ef6d7d;--ok:#4fbfae;--acc:#7aa2f7;--halo:#14161a;
+--charge:#4cc97a;--repair:#a98bf0;--crash:#f0524d}}
 text{font-family:'DejaVu Sans','Segoe UI',Helvetica,Arial,sans-serif;fill:var(--fg)}
 .mut{fill:var(--mut)}
 .ttl{font-weight:600}
@@ -347,6 +350,94 @@ def pin(x, y, label, colour="var(--warn)", r=8.5):
             + txt(x, y + 3.4, label, 9.5, "", "middle", 'fill="#ffffff" font-weight="700"'))
 
 
+# The game's own colours for the two pads. A reader who has just flown the
+# track already knows green means charge and purple means repair; inventing a
+# second mapping here would make them learn it twice.
+PIT_COLOUR = {"recharge": "var(--charge)", "repair": "var(--repair)"}
+
+
+def pit_marker(x, y, kind, r=9.0):
+    """The icon a pit stop gets on a map: a disc with a drawn glyph in it.
+
+    Drawn, not a character. These SVGs are loaded through <img>, which renders
+    with whatever the viewer's font stack resolves - an emoji or a symbol font
+    is not a safe assumption, and a missing glyph shows as a box on the one
+    figure that has to be readable at a glance. Two paths cost less than that
+    risk.
+
+      recharge  a lightning bolt
+      repair    a two-blade propeller, seen from above
+
+    Colour separates them as well as shape, because at 18 px across the shape
+    alone is doing a lot of work."""
+    c = PIT_COLOUR.get(kind, "var(--warn)")
+    disc = ('<circle cx="%s" cy="%s" r="%s" fill="%s" stroke="var(--halo)" '
+            'stroke-width="1.6"/>' % (n(x), n(y), n(r, 1), c))
+    if kind == "recharge":
+        k = r / 9.0
+        glyph = ('<path d="M%s %s l%s %s l%s %s l%s %s l%s %s l%s %s Z" fill="#ffffff"/>'
+                 % (n(x + 1.6 * k, 1), n(y - 5.0 * k, 1), n(-4.2 * k, 1), n(6.0 * k, 1),
+                    n(2.8 * k, 1), n(0, 1), n(-1.4 * k, 1), n(4.8 * k, 1),
+                    n(4.4 * k, 1), n(-6.4 * k, 1), n(-3.0 * k, 1), n(0, 1)))
+    else:
+        k = r / 9.0
+        glyph = ('<g fill="#ffffff"><ellipse cx="%s" cy="%s" rx="%s" ry="%s" '
+                 'transform="rotate(35 %s %s)"/><ellipse cx="%s" cy="%s" rx="%s" ry="%s" '
+                 'transform="rotate(-35 %s %s)"/><circle cx="%s" cy="%s" r="%s" fill="%s"/></g>'
+                 % (n(x), n(y), n(5.6 * k, 1), n(1.9 * k, 1), n(x), n(y),
+                    n(x), n(y), n(5.6 * k, 1), n(1.9 * k, 1), n(x), n(y),
+                    n(x), n(y), n(1.5 * k, 1), c))
+    return disc + glyph
+
+
+def crash_marker(x, y, r=9.0):
+    """A crash on a map: a red disc with a white X.
+
+    The same symbol wherever an impact is drawn - the lap maps, the playbacks
+    and the 3D recording - because a pilot scanning a report for what went wrong
+    should be looking for one shape, not learning a different one per figure."""
+    k = r / 9.0
+    arm = 4.0 * k
+    return ('<circle cx="%s" cy="%s" r="%s" fill="var(--crash)" stroke="var(--halo)" '
+            'stroke-width="1.6"/>'
+            '<path d="M%s %s L%s %s M%s %s L%s %s" stroke="#ffffff" stroke-width="%s" '
+            'stroke-linecap="round" fill="none"/>'
+            % (n(x), n(y), n(r, 1),
+               n(x - arm, 1), n(y - arm, 1), n(x + arm, 1), n(y + arm, 1),
+               n(x + arm, 1), n(y - arm, 1), n(x - arm, 1), n(y + arm, 1),
+               n(2.2 * k, 1)))
+
+
+def crash_pins(crashes, data, pr, r=9.0):
+    """Every impact of one segment, marked where it happened."""
+    return "".join(crash_marker(*pr(data[c["index"]]), r) for c in crashes)
+
+
+def pit_pins(pits, pr, r=9.0):
+    """Every pit stop of one segment, marked where the quad actually stopped."""
+    return "".join(pit_marker(*pr({"x": q["x"], "z": q["z"]}), q["kind"], r) for q in pits)
+
+
+def legend_marks(x, y, kinds, crashed=False):
+    """A key for whichever incident icons the figure actually drew.
+
+    Right-anchored: it is placed against the panel edge, and a key whose width
+    depends on which of three entries appear would otherwise wander."""
+    entries = [(k, k) for k in ("recharge", "repair") if k in kinds]
+    if crashed:
+        entries.append(("crash", "crash"))
+    if not entries:
+        return ""
+    w = sum(24 + 6 * len(label) for _k, label in entries)
+    out, dx = [], x - w
+    for kind, label in entries:
+        out.append(crash_marker(dx + 7, y, 7.0) if kind == "crash"
+                   else pit_marker(dx + 7, y, kind, 7.0))
+        out.append(txt(dx + 17, y + 4, label, 10, "mut"))
+        dx += 24 + 6 * len(label)
+    return "".join(out)
+
+
 def legend_speed(x, y, vref, w=210, label="speed"):
     """The key for the speed ramp the paths are drawn with.
 
@@ -363,7 +454,7 @@ def legend_speed(x, y, vref, w=210, label="speed"):
             + txt(x + w, y + 20, "%d+ km/h" % round(vref), 9.5, "mut", "end"))
 
 
-def fig_line(data, ranges, names, out, title):
+def fig_line(data, ranges, names, out, title, pits=(), crashes=()):
     W = 960
     bounds = bounds_of(data)
     ph = fit_height(bounds, W, lo=240, hi=560)
@@ -376,7 +467,10 @@ def fig_line(data, ranges, names, out, title):
         body.append('<rect x="%d" y="%s" width="14" height="4" rx="2" fill="%s"/>'
                     % (18 + k * 100, n(46 + ph + 16), c))
         body.append(txt(38 + k * 100, 46 + ph + 24, names[k], 11))
+    body.append(pit_pins(pits, pr))
+    body.append(crash_pins(crashes, data, pr))
     body.append(scale_bar(pr, W - 140, 46 + ph - 16))
+    body.append(legend_marks(W - 18, 46 + ph + 20, {q["kind"] for q in pits}, bool(crashes)))
     body.append(txt(14, H - 14, "Where the laps separate is a LINE difference. No change of "
                                 "stick technique moves a line - only knowing the track does.",
                     10, "mut"))
@@ -694,7 +788,7 @@ def marker(nose, vel, vis, skid, times, dur, scale=1.0):
 
 
 def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
-             cam_span_m=45.0):
+             cam_span_m=45.0, pits=(), crashes=()):
     """Overview map with a moving quad, plus a follow-cam that keeps the quad
     centred and magnified.
 
@@ -762,6 +856,10 @@ def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
                     'stroke-linecap="round" opacity="0.7" stroke-dasharray="%s %s">%s</path>'
                     % (d, n(tot, 1), n(tot, 1),
                        animate("stroke-dashoffset", [n(tot - c, 1) for c in cum], times, dur)))
+    # Under the moving quad, not over it: the icon says where the stop was, and
+    # the thing being watched is the quad arriving at it.
+    body.append(pit_pins(pits, pr, 8.0))
+    body.append(crash_pins(crashes, data, pr, 8.0))
     body.append('<g>%s%s</g>' % (animate_tf("translate", xs, times, dur),
                                 marker(nose, vel, vis, skid, times, dur, 0.8)))
     body.append(scale_bar(pr, W - 150, 46 + mh - 16))
@@ -771,7 +869,11 @@ def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
     zoom = max(1.0, cam / max(1e-6, cam_span_m * pr.s))
     ccx, ccy = 8 + cam / 2, cy + cam / 2
     inner = (poly([pr(s) for s in seg], "var(--grid)", 5.5 / zoom)
-             + speed_path(seg, pr, vref, 3.0 / zoom))
+             + speed_path(seg, pr, vref, 3.0 / zoom)
+             # The cam magnifies its contents, so the icon is pre-divided to
+             # come out the same size on screen as the one on the overview map.
+             + pit_pins(pits, pr, 9.0 / zoom)
+             + crash_pins(crashes, data, pr, 9.0 / zoom))
     pan = ["%s,%s" % (n(-p[0] * zoom, 1), n(-p[1] * zoom, 1)) for p in pts]
     body.append('<defs><clipPath id="cam"><rect x="8" y="%s" width="%d" height="%d" rx="6"/>'
                 '</clipPath></defs>' % (n(cy), cam, cam))
@@ -814,7 +916,10 @@ def fig_anim(data, a, b, out, title, caption, vref, dur_cap=40.0, frames=380,
                               ["%s,0" % n(strip.tx(data[i]["t"]) - strip.x, 1) for i in idx],
                               times, dur)))
     body.append(legend_speed(14, H - 52, vref, label="path colour"))
+    body.append(legend_marks(W - 18, H - 48, {q["kind"] for q in pits}, bool(crashes)))
     foot = [caption, "nose = arrow", "direction of travel = dashed ray"]
+    if pits:
+        foot.append("%d pit stop%s marked" % (len(pits), "" if len(pits) == 1 else "s"))
     if rate > 1.01:
         foot.append("playback %.1f× real time" % rate)
     body.append(txt(14, H - 14, SEP.join(foot), 10, "mut"))
@@ -884,17 +989,186 @@ class Pool:
 
 
 
-def find_crashes(series, hits, ranges, names):
+# ---------------------------------------------------------------------------
+# pit stops
+#
+# A track can carry volumes that repair the props or recharge the battery, and
+# the way a pilot uses one is to fly into it and SIT THERE. That reads to the
+# impact detector exactly like hitting the ground, because it is hitting the
+# ground - the difference is entirely in where, and in what happens next.
+#
+# Two things follow, and they are the whole of this section:
+#
+#   1. an impact inside a pit volume that the quad flies out of again is a
+#      LANDING, not a crash. Counting it as a crash invents a fault the pilot
+#      does not have, and buries the three real ones under it. An impact inside
+#      a pit volume the quad never flies out of stays a crash: the drone was
+#      lost there, and the pit is only where it happened to happen.
+#   2. the stop itself is a real cost on the clock and gets reported as one -
+#      an icon on the map where it happened, and a row saying how long it took.
+#
+# Which volumes exist is a sim's own business; this file is handed them already
+# resolved to {shape, pos, yaw, size} and tests points against them.
+# ---------------------------------------------------------------------------
+
+
+def visits(series, pits, dt, min_s, stall_speed, gap_s=0.6):
+    """One record per pit stop: `(first index, last index, volume ids, inside count)`.
+
+    A stop is not the same thing as time inside the volume, and conflating them
+    understates what it cost. On the 2026-09-03 Hall26 recording the pilot
+    arrived at the charge pad, OVERSHOT IT BY A HANDFUL OF CENTIMETRES, sat
+    motionless just outside for three seconds, then nudged back in and charged.
+    Split on containment alone that reads as a 0.8 s stop and a 4.6 s stop with
+    three seconds of nothing between them - three seconds that were the most
+    expensive part of the stop and that vanished from the pit accounting
+    entirely.
+
+    So two runs inside the SAME volume join when the quad never got airborne in
+    between: it never left, it was fumbling the approach, and that is one stop.
+    `gap_s` still closes a bounce of a sample or two regardless, because a quad
+    settling in a 3.7 m box crosses its own boundary as it lands.
+
+    Same volume, deliberately. Repair and recharge pads sit side by side, and
+    flying from one to the other IS two stops for two different services - the
+    Hall26 reference has them 0.5 s apart and they must stay two rows.
+
+    `min_s` is what separates a stop from a fly-through. A race line that clips
+    the corner of a charge volume at speed is inside it for one or two samples
+    and is not a pit stop; marking it as one puts an icon on the map for
+    something that did not happen."""
+    if not pits:
+        return []
+    inside = []
+    for i, sample in enumerate(series):
+        hit = next((v for v in pits if geometry.inside_volume(sample.pos, v)), None)
+        if hit is not None:
+            inside.append((i, hit["id"]))
+    if not inside:
+        return []
+    bounce = max(1, int(round(gap_s / dt)))
+
+    def joins(prev, nxt):
+        if prev[1] != nxt[1]:
+            return False
+        if nxt[0] - prev[0] <= bounce:
+            return True
+        return all(series[k].speed_kmh < stall_speed
+                   for k in range(prev[0] + 1, nxt[0]))
+
+    out, run = [], [inside[0]]
+    for entry in inside[1:]:
+        if joins(run[-1], entry):
+            run.append(entry)
+        else:
+            out.append(run)
+            run = [entry]
+    out.append(run)
+    return [(r[0][0], r[-1][0], {e[1] for e in r}, len(r))
+            for r in out if (r[-1][0] - r[0][0] + 1) * dt >= min_s]
+
+
+def find_pit_stops(series, pits, ranges, names, dt, min_s, stall_speed):
+    """One record per pit stop: where, which service, and the three durations
+    that are not the same number.
+
+    `seconds` is the whole stop, first arrival to final departure.
+    `serviced_s` is the part of it actually inside the volume - the part that
+    repaired or charged anything.
+    `grounded_s` is the part below the stall speed.
+
+    They separate because the difference is coachable. A stop that is 8.4 s long
+    and 5.4 s serviced means three seconds parked NEXT TO the pad rather than on
+    it, which is a placement error with a number on it; a stop where the two
+    agree was simply the service taking its time.
+
+    `x`/`z` is where the quad was at its slowest, which is where the icon goes:
+    the volume's own centre would put the icon in the same place whether he
+    stopped on its threshold or in the middle of it."""
+    by_id = {v["id"]: v for v in pits}
+    t0 = series[0].t
+    out = []
+    for i0, i1, vol_ids, n_inside in visits(series, pits, dt, min_s, stall_speed):
+        slowest = min(range(i0, i1 + 1), key=lambda i: series[i].speed_kmh)
+        kinds = sorted({by_id[v]["kind"] for v in vol_ids})
+        out.append({
+            "n": len(out) + 1,
+            "index": [i0, i1],
+            "segment": next((names[k] for k, (a, b) in enumerate(ranges) if a <= i0 < b), "-"),
+            "t": round(series[i0].t - t0, 1),
+            "kind": "+".join(kinds),
+            "seconds": round((i1 - i0 + 1) * dt, 1),
+            "serviced_s": round(n_inside * dt, 1),
+            "grounded_s": round(sum(1 for i in range(i0, i1 + 1)
+                                    if series[i].speed_kmh < stall_speed) * dt, 1),
+            "min_kmh": round(series[slowest].speed_kmh, 1),
+            "x": series[slowest].pos[0],
+            "z": series[slowest].pos[2],
+        })
+    return out
+
+
+def drop_pit_stalls(analysed, pit_stops):
+    """Take the pit stops back out of the stall list, and record what they cost.
+
+    Sitting in a repair volume for six seconds trips the stall detector exactly
+    as a stall does, and gets classified as a `hesitation` - a stop nothing on
+    the track asked for. It is the same false positive as the crash one step
+    further on: the stop was the point, and reporting it as a fault buries the
+    real stalls under it.
+
+    The seconds are not deleted, only relabelled. `slow_seconds` still counts
+    them - it is a measurement of the flight, not a judgement - and
+    `pit_seconds` says how much of it the pilot chose. Returns the number of
+    stalls removed."""
+    dropped = 0
+    for e in analysed:
+        mine = [q for q in pit_stops if q["segment"] == e["segment"]]
+        e["pit_seconds"] = round(sum(q["seconds"] for q in mine), 1)
+        keep = []
+        for st in e["stalls"]:
+            a, b = st["index"]
+            if any(a <= q["index"][1] and q["index"][0] <= b for q in mine):
+                dropped += 1
+                continue
+            keep.append(st)
+        e["stalls"] = keep
+    return dropped
+
+
+def in_a_pit(series, i, pits, dt, settle_s=1.0):
+    """Was the quad in a pit volume at this impact, or just after it?
+
+    Just after matters: an impact is the sample the speed collapses on, and a
+    quad arriving fast can touch down a metre short of the volume and slide into
+    it. Testing the impact sample alone misses those and calls them crashes."""
+    end = min(len(series), i + max(1, int(round(settle_s / dt))) + 1)
+    return any(geometry.inside_volume(series[k].pos, v)
+               for k in range(i, end) for v in pits)
+
+
+def flew_again(series, i, recover_kmh):
+    """Did the quad get airborne again after this sample, or was that the end?"""
+    return any(series[k].speed_kmh >= recover_kmh for k in range(i + 1, len(series)))
+
+
+def find_crashes(series, hits, ranges, names, pits=(), dt=0.1, recover_kmh=10.0):
     """One record per impact: when, how hard, where in the run, and how high.
 
     `hits` comes from the trajectory, not from the replay's isCrashed flag,
     which reads false on flights that ended pinned against the ground - see
-    liftoff_view.impacts()."""
+    liftoff_view.impacts().
+
+    Returns `(crashes, landings)`. A landing is an impact inside a repair or
+    recharge volume that the quad flew out of again: the pilot put it down on
+    purpose and the flight continued. One that never flew again is left in
+    `crashes`, because the drone was lost there and a pit volume is not an
+    exemption from that - it is only where it happened."""
     t0 = series[0].t
-    out = []
+    out, landed = [], []
     for n, i in enumerate(hits, 1):
         seg = next((names[k] for k, (a, b) in enumerate(ranges) if a <= i < b), "-")
-        out.append({
+        rec = {
             "n": n,
             "index": i,
             "t": round(series[i].t - t0, 1),
@@ -907,8 +1181,18 @@ def find_crashes(series, hits, ranges, names):
             # moment from one that ended the run.
             "after_kmh": round(series[min(len(series) - 1, i + 20)].speed_kmh, 1),
             "hit": None,
-        })
-    return out
+        }
+        if pits and in_a_pit(series, i, pits, dt) and flew_again(series, i, recover_kmh):
+            landed.append(rec)
+        else:
+            out.append(rec)
+    # Renumbered after the split so the Crashes table reads 1, 2, 3 rather than
+    # carrying the holes the landings left in it.
+    for k, c in enumerate(out, 1):
+        c["n"] = k
+    for k, c in enumerate(landed, 1):
+        c["n"] = k
+    return out, landed
 
 
 def crash_id(c):
@@ -990,10 +1274,17 @@ def findings(meta, report, names, pb, crashes=()):
                       worst["entry_kmh"], worst["min_kmh"], worst["height_m"], what))
     slow = sum(e["slow_seconds"] for e in report)
     dur = sum(e["duration_s"] for e in report)
+    pit_s = sum(e.get("pit_seconds") or 0.0 for e in report)
     stalls = [s for e in report for s in e["stalls"]]
     if dur:
-        out.append("**%.1f s below 10 km/h** across %.1f s of flying, %.0f%% of the run."
-                   % (slow, dur, 100 * slow / dur))
+        # The pit time is named rather than subtracted. It IS time below the
+        # speed, so removing it would make the number wrong; what it is not is
+        # time the pilot lost, and a reader who cannot see the split will read
+        # the whole figure as a fault.
+        out.append("**%.1f s below 10 km/h** across %.1f s of flying, %.0f%% of the run.%s"
+                   % (slow, dur, 100 * slow / dur,
+                      "  **%.1f s of that was pit stops**, not lost speed." % pit_s
+                      if pit_s else ""))
     if stalls:
         kinds = {}
         for s in stalls:
@@ -1118,7 +1409,7 @@ def rec_cell(rec_id, rec_ids):
 
 
 def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrief=None,
-                 crashes=(), rec_ids=()):
+                 crashes=(), rec_ids=(), pits=()):
     """The reader's order, which is not the analysis order.
 
     The debrief comes first because it is the answer; everything after it is the
@@ -1181,6 +1472,30 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
                           "separate is a LINE difference. No change of stick technique "
                           "moves a line - only knowing the track does.", ""])
 
+        # Here, under the maps, and not beside the lap bars. A pit stop is time
+        # on the clock, so the lap times looked like the right home for it - but
+        # the icons that say WHERE it happened are on these maps, and in the HTML
+        # the two are different tabs. The table and the thing it annotates have
+        # to be on screen together, and this is the half that cannot move.
+        if pits:
+            L += ["### Pit stops", "",
+                  md_table(["Segment", "#", "t", "service", "stopped", "servicing",
+                            "on the ground", "wasted"],
+                           [[q["segment"], q["n"], "%.1f" % q["t"], q["kind"],
+                             "**%.1f s**" % q["seconds"], "%.1f s" % q["serviced_s"],
+                             "%.1f s" % q["grounded_s"],
+                             "**%.1f s**" % (q["seconds"] - q["serviced_s"])
+                             if q["seconds"] - q["serviced_s"] >= 0.5 else "-"]
+                            for q in pits]), "",
+                  "A green bolt (recharge) or a purple propeller (repair) marks each of "
+                  "these on the maps above, in the game's own colours; a crash is a red "
+                  "X. `stopped` is the whole stop, arrival to departure. `servicing` is "
+                  "the part of it actually inside the volume - the part that repaired or "
+                  "charged anything. The difference is time parked NEXT TO the pad rather "
+                  "than on it, and it is a placement error with a number on it. A landing "
+                  "here is not a crash and is not in the crash table - unless the quad "
+                  "never flew out of it again.", ""]
+
     # The section leads with the moments and ends with the reference tables, in
     # the order a pilot asks for them: what went wrong, then where it went
     # slowly, then the numbers behind both. The crashes and the stalls open on
@@ -1203,6 +1518,12 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
                 "something braking can do. `hit` is the nearest SOLID track prop, and is "
                 "blank when the track data for this environment has not been extracted - "
                 "not a claim that the quad hit nothing.", ""]
+        if pits:
+            body[-1] = ("A landing inside a repair or recharge volume that the quad flew "
+                        "out of again is NOT in this table - it is a pit stop, below. One "
+                        "the quad never flew out of stays here: the pit is where the drone "
+                        "was lost, not a reason it was not.")
+            body += [""]
         L += details("Crashes (%d)" % len(crashes), body, open_=True)
 
     stalls = [(k, i, st) for k, e in enumerate(report) for i, st in enumerate(e["stalls"], 1)]

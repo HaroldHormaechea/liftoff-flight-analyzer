@@ -260,10 +260,17 @@ function fpvViewer(root, D){
     for (const i of D.impacts){
       const p = project(D.path[i].p, B, W, H, focal);
       if (!p) continue;
+      /* A filled red disc with a white X - the same mark the lap maps and the
+         playbacks use for an impact, so one shape means "crash" everywhere in
+         the report rather than three. */
       const rr = Math.max(6, 260/p[2]) * devicePixelRatio;
-      cx.beginPath(); cx.arc(p[0],p[1],rr,0,7); cx.strokeStyle='#f0524d';
-      cx.lineWidth=2.5*devicePixelRatio; cx.stroke();
-      cx.beginPath(); cx.arc(p[0],p[1],rr*0.34,0,7); cx.fillStyle='#f0524d'; cx.fill();
+      cx.beginPath(); cx.arc(p[0],p[1],rr,0,7); cx.fillStyle='#f0524d'; cx.fill();
+      const a = rr*0.45;
+      cx.beginPath();
+      cx.moveTo(p[0]-a,p[1]-a); cx.lineTo(p[0]+a,p[1]+a);
+      cx.moveTo(p[0]+a,p[1]-a); cx.lineTo(p[0]-a,p[1]+a);
+      cx.strokeStyle='#ffffff'; cx.lineWidth=Math.max(1.5, rr*0.24);
+      cx.lineCap='round'; cx.stroke(); cx.lineCap='butt';
     }
 
     // the quad: a small body at its true attitude, plus a nose arrow

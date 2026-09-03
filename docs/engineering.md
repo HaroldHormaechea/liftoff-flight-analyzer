@@ -437,6 +437,76 @@ first-difference estimate was silently scaling every duration by up to 1.9×.
 Works on either input: replay CSV (10 Hz, velocity differentiated from position)
 or telemetry CSV (100 Hz, velocity measured).
 
+## Pit stops, and why they are not crashes
+
+A track's blueprint list can hold `TriggerBoxRepairPropellers` and
+`TriggerBoxChargeBattery` volumes — `TrackBlueprintAction` items whose `<action>`
+child names the service. `ShowText` is the only other action shipped and is not a
+pit. `tracks.pit_volumes()` resolves them to `{shape, pos, yaw, size}`: the
+prefabs are unit-sized, so `scale` **is** the full extent in metres, and the
+`TriggerBox_` / `TriggerSphere_` prefix is what says which containment test to
+run. `geometry.inside_volume()` runs it — deliberately not `contains_point()`,
+which takes the scene cache's already-halved, quaternion-rotated collider dict.
+
+The way a pilot uses one is to fly in and **sit there**, which the impact
+detector reads as hitting the ground, because it is hitting the ground. Two
+false positives followed and both are now handled:
+
+* **the crash.** An impact inside a pit volume that the quad flew out of again
+  is a landing and goes to `pit_landings`. One it never flew out of stays in
+  `crashes`: the drone was lost there, and a pit volume is not an exemption from
+  that — it is only where it happened. The recovery test is the same speed the
+  stall detector uses. Containment is tested over the second FOLLOWING the
+  impact, not on the impact sample alone: a quad arriving fast touches down short
+  of the volume and slides into it.
+* **the stall.** A six-second repair tripped the stall detector and came back
+  classified `hesitation` — a stop nothing on the track asked for. `drop_pit_stalls()`
+  takes them out. The seconds are relabelled, not deleted: `slow_seconds` still
+  counts them, because it measures the flight, and `pit_seconds` says how much of
+  it the pilot chose. The findings line names the split rather than subtracting
+  it.
+
+A stop is reported as a **cost**, not a fault: an icon on every lap map and
+playback where it happened, and one row at the foot of **Flight playback**
+saying how long the visit was and how much of it was on the ground. It sat at the
+foot of Highlights first and then beside the lap bars, and both were wrong for
+the same reason: in the HTML those are different TABS from the maps that carry
+the icons, so the table and the thing it annotates were never on screen together.
+The seconds can move; the icons cannot. The icons are drawn paths, not characters — these
+SVGs load through `<img>` and an emoji font is not a safe assumption.
+
+Colour carries as much of it as shape does, because at 18 px across the shape
+alone is doing a lot of work. `--charge` is green and `--repair` purple, matching
+the pads in the game: a pilot who has just flown the track already knows that
+mapping, and inventing a second one here would make them learn it twice. An
+impact is `--crash`, a red disc with a white X, and it is the **same mark in
+every view** — the lap maps, the playbacks and the canvas in the 3D recording —
+so someone scanning a report for what went wrong is looking for one shape rather
+than learning a different one per figure.
+
+A stop is not the same thing as time inside the volume, and three durations are
+reported rather than one: `seconds` (arrival to departure), `serviced_s` (the
+part actually inside, which is the part that repaired or charged anything) and
+`grounded_s`. Two runs inside the **same** volume join when the quad never got
+airborne between them — it never left, it was fumbling the approach. On the
+2026-09-03 Hall26 recording the pilot arrived at the charge pad, overshot it by a
+few centimetres, sat motionless just outside for three seconds and then nudged
+back in; split on containment alone that reads as a 0.8 s stop and a 4.6 s stop
+with three seconds of nothing between them — three seconds that were the most
+expensive part of the stop and vanished from the pit accounting entirely. Joined,
+it is one 8.4 s stop, 5.4 s of it servicing, and the 3.0 s difference is a
+placement error with a number on it. Same volume deliberately: repair and
+recharge pads sit side by side and flying from one to the other IS two stops.
+
+`PIT_MIN_S` (0.5 s) separates a stop from a fly-through: a race line clips the
+corner of a 3.7 m volume at 50 km/h for two samples, and marking that as a pit
+stop puts an icon on the map for something that did not happen. It lives in
+`calibration.py` because it is a duration of real flight tuned against Liftoff's
+volume sizes, not a property of the report.
+
+With no extracted track data there are no pit volumes, and every impact is
+reported as an impact — which is what the tool did before any of this existed.
+
 ## Live telemetry — dormant, kept deliberately
 
 The `telemetry` command receives Liftoff's UDP stream: everything the replay has,

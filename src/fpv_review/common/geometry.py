@@ -64,6 +64,32 @@ def contains_point(c, p):
     return off[0] * off[0] + off[1] * off[1] + off[2] * off[2] <= c["r"] * c["r"]
 
 
+
+def inside_volume(p, vol):
+    """Is a world point inside a trigger volume - a yaw-rotated box, or a sphere?
+
+    Deliberately NOT `contains_point`. That one takes the scene cache's collider
+    dict, which is a full quaternion and half-extents already halved; a trigger
+    volume comes out of a track's blueprint list as a centre, a yaw in degrees
+    and a FULL size in metres, and converting one into the other at every call
+    site would put the halving and the degree conversion in three places.
+
+    The volume: {"shape": "box"|"sphere", "pos": (x, y, z), "yaw": deg,
+                 "size": (sx, sy, sz)}"""
+    d = (p[0] - vol["pos"][0], p[1] - vol["pos"][1], p[2] - vol["pos"][2])
+    if vol["shape"] == "sphere":
+        r = vol["size"][0] / 2.0
+        return d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= r * r
+    # Yaw is a rotation about +Y, so the inverse is the same rotation negated,
+    # and only the horizontal components move.
+    a = math.radians(-vol["yaw"])
+    ca, sa = math.cos(a), math.sin(a)
+    lx = d[0] * ca + d[2] * sa
+    lz = -d[0] * sa + d[2] * ca
+    sx, sy, sz = vol["size"]
+    return abs(lx) <= sx / 2.0 and abs(d[1]) <= sy / 2.0 and abs(lz) <= sz / 2.0
+
+
 def path_inside(colliders, path):
     """Fraction of flown samples that fall inside solid geometry.
 

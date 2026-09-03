@@ -211,7 +211,10 @@ for context around a stall recording, `--no-rec` to skip the recordings entirely
 - **Corner scorecard** — tilt against sideslip, plus throttle added per corner.
   Down and to the right is a committed, coordinated corner.
 - **The recordings**, under **Highlights and recordings**, which leads with the
-  Crashes table, then Stalls, then the reference numbers behind them. Every row
+  Crashes table, then Stalls, then the reference numbers behind them. A
+  **Pit stops** table sits at the foot of **Flight playback**, not here, when the
+  track has repair or recharge volumes the pilot used — beside the maps whose
+  icons say where each stop happened. Every row
   of the Crashes and Stalls
   tables carries a play control, and it opens that moment in 3D inside the page
   — the environment, the track props, the path coloured by speed, the quad at
@@ -237,10 +240,26 @@ What to read in the numbers:
   used, because it reads false on runs that ended pinned against the ground.
   Each carries the speed lost, the height, and the nearest solid track prop —
   usually what was hit.
+- **`pit_stops` and `pit_landings`** — a track can carry repair and recharge
+  volumes, and the way a pilot uses one is to fly in and sit there. That reads
+  to the impact detector exactly like hitting the ground, because it is.
+  **An impact inside a pit volume that the quad flew out of again is a landing,
+  not a crash**, and it is in `pit_landings` rather than `crashes`; one the quad
+  never flew out of stays a crash, because the drone was lost there and the pit
+  is only where it happened. `pit_stops` is the stop itself — which service, how
+  long the whole stop was (`seconds`), how much of it was actually inside the
+  volume (`serviced_s`) and how much on the ground (`grounded_s`). The gap
+  between the first two is time parked NEXT TO the pad rather than on it, which
+  is coachable. It is drawn
+  on every lap map and playback as a green bolt (recharge) or a purple propeller
+  (repair), matching the game's own pad colours. A crash is a red disc with a
+  white X, the same mark in the maps, the playbacks and the 3D recording. A stop is not a
+  fault, it is a cost: read it off the clock, do not coach it. It is also taken
+  out of `stalls`, so a six-second repair is not reported as a hesitation.
 - **`stalls`** — every episode below 10 km/h, classified `overrun` (the path
   reversed and retraced itself), `corner` (another lap turns there too, so the
   track asked for it) or `hesitation` (another lap flies straight through). This
-  is what turns "you were slow" into a cause.
+  is what turns "you were slow" into a cause. Pit stops are excluded.
 - **`d_thr` per corner** — throttle added through the corner. Bank sets the
   direction of the turning force, throttle its magnitude, so a corner with no
   throttle increase goes wide and sinks.

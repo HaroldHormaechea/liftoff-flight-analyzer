@@ -1,6 +1,6 @@
 {
-  "generated": "2026-08-30T11:19:02",
-  "source_replay": "replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
+  "generated": "2026-09-03T12:29:21",
+  "source_replay": "fpv-drone\\replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
   "race_name": "03 - Stuff That Works",
   "meta": {
     "name": "03 - Stuff That Works - 01_20_953 - 2026-08-28",
@@ -241,7 +241,8 @@
           }
         ]
       },
-      "stalls": []
+      "stalls": [],
+      "pit_seconds": 0
     },
     {
       "segment": "lap 2",
@@ -434,7 +435,8 @@
           }
         ]
       },
-      "stalls": []
+      "stalls": [],
+      "pit_seconds": 0
     },
     {
       "segment": "lap 3",
@@ -591,7 +593,8 @@
           }
         ]
       },
-      "stalls": []
+      "stalls": [],
+      "pit_seconds": 0
     }
   ],
   "findings": [
@@ -601,14 +604,17 @@
     "**Best lap here was 0:26.184, against a personal best of 0:22.350** on the same geometry (+3.8 s)."
   ],
   "crashes": [],
-  "crash_detection": "speed lost inside one 0.1 s sample, >= 20 km/h; the replay's isCrashed flag is not used, it reads false on flights that ended pinned against the ground",
+  "crash_detection": "speed lost inside one 0.1 s sample, >= 20 km/h; the replay's isCrashed flag is not used, it reads false on flights that ended pinned against the ground. An impact inside a repair or recharge volume that the quad flew out of again is in pit_landings, not here; one it never flew out of stays here.",
+  "pit_landings": [],
+  "pit_stops": [],
+  "pit_volumes": [],
   "recordings": {
     "in": "report.html, opened from the crash and stall tables",
     "ids": [],
     "titles": {}
   },
   "personal_bests": {
-    "taken_at": "2026-08-29T20:04:17",
+    "taken_at": "2026-09-03T11:55:27",
     "best_race": 80.95347,
     "all_race": [
       80.95347,
@@ -625,6 +631,67 @@
       24.8841171,
       25.2178974
     ]
+  },
+  "capabilities": {
+    "sim": "liftoff",
+    "fields": {
+      "attitude": {
+        "state": "available",
+        "note": "quaternion, confirmed against a simultaneous 100 Hz telemetry capture"
+      },
+      "battery": {
+        "state": "unavailable",
+        "note": "a saved replay carries no battery; only the live UDP telemetry feed does"
+      },
+      "gyro": {
+        "state": "unavailable",
+        "note": "a saved replay carries no gyro; only the live UDP telemetry feed does"
+      },
+      "lap_boundaries": {
+        "state": "available",
+        "note": "lapTimes and lapStartIndices, from the replay itself"
+      },
+      "motor_rpm": {
+        "state": "unavailable",
+        "note": "a saved replay carries no motor rpm; only the live UDP telemetry feed does"
+      },
+      "personal_bests": {
+        "state": "available",
+        "note": "from snapshots of the game's own ratcheting time files"
+      },
+      "position": {
+        "state": "available",
+        "note": "world-space metres at 10 Hz"
+      },
+      "prop_shapes": {
+        "state": "available",
+        "note": "per-prop collider shapes",
+        "conditional_on": "the prop table"
+      },
+      "sample_rate": {
+        "state": "available",
+        "note": "10 Hz nominal but irregular (0.003-0.197 s observed), so the interval is the measured MEDIAN, never a first difference"
+      },
+      "stick_positions": {
+        "state": "available",
+        "note": "throttle 0..1 and three axes -1..+1; exact, not estimated"
+      },
+      "track_geometry": {
+        "state": "available",
+        "note": "gates and route from the game's own bundles",
+        "conditional_on": "the trackdata cache"
+      },
+      "velocity": {
+        "state": "derived",
+        "note": "central difference on position at 10 Hz - good for trajectory work, not for fine control detail; the replay stores none"
+      },
+      "world_geometry": {
+        "state": "available",
+        "note": "static environment colliders",
+        "conditional_on": "the scene cache"
+      }
+    },
+    "gaps_named_in_this_run": []
   },
   "figures": {
     "csv": "flight.csv",

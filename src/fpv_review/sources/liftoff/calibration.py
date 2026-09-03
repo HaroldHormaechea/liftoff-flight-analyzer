@@ -20,6 +20,14 @@ common/.
 IMPACT_DROP_KMH = 20.0          # speed lost inside one 0.1 s sample
 IMPACT_DEBOUNCE_SAMPLES = 3     # a two-sample collapse is one impact, not two
 
+# ------------------------------------------------------------------- pit stops
+# A track's repair and recharge volumes are 3.7-4.5 m across and a race line
+# clips the corner of one at 50 km/h for two samples. Half a second inside is
+# the gap between that and a stop: it is 7 m of travel at racing speed and no
+# pilot crosses one that slowly by accident.
+
+PIT_MIN_S = 0.5                 # shortest visit that counts as a stop
+
 # ------------------------------------------------------------------ prop scale
 # Liftoff track props are placed by the Track XML and instantiated from prefabs
 # at runtime, so their position is exact and their shape is not. This is the

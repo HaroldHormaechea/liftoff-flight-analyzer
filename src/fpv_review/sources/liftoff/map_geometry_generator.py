@@ -64,6 +64,29 @@ def props_near(track_dir, track_meta, route, points, radius, shapes=None):
     return out
 
 
+
+def pits_for(replay, track_dir):
+    """The repair and recharge volumes of the track a replay was flown on.
+
+    Separate from `geometry_for` on purpose: that one is about DRAWING the
+    environment and is skipped entirely with --no-rec, while the pit volumes are
+    needed for the figures and the pit-stop table on every run. Folding them in
+    there would make the crash table's contents depend on a flag about
+    recordings.
+
+    Empty when the track data has not been extracted, which is the same failure
+    the rest of the pipeline already degrades through: no pit volumes means
+    every impact is reported as an impact, which is what the tool did before
+    pits existed."""
+    try:
+        track, _race, _tid, _rid = tracks.for_replay(track_dir, replay)
+    except Exception:
+        return []
+    if track is None:
+        return []
+    return tracks.pit_volumes(tracks.parse_xml(Path(track_dir) / track["file"]))
+
+
 def geometry_for(replay, track_dir, scenes_dir, props_path):
     """Whatever of the environment is cached -> (track, race, scene, shapes, note).
 

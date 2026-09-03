@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 894" width="900" height="894" role="img"><title>lap 2, played back</title><style>
 :root{--bg:#ffffff;--pan:#f4f6f8;--fg:#1b1d21;--mut:#6b7178;--grid:#dfe3e8;
---warn:#c8384b;--ok:#1f8a7d;--acc:#3f6fd0;--halo:#ffffff}
+--warn:#c8384b;--ok:#1f8a7d;--acc:#3f6fd0;--halo:#ffffff;
+--charge:#1f8a45;--repair:#7b3fcf;--crash:#d1303f}
 @media (prefers-color-scheme:dark){:root{--bg:#14161a;--pan:#1c1f25;--fg:#e7e9ec;
---mut:#8b9199;--grid:#2b3037;--warn:#ef6d7d;--ok:#4fbfae;--acc:#7aa2f7;--halo:#14161a}}
+--mut:#8b9199;--grid:#2b3037;--warn:#ef6d7d;--ok:#4fbfae;--acc:#7aa2f7;--halo:#14161a;
+--charge:#4cc97a;--repair:#a98bf0;--crash:#f0524d}}
 text{font-family:'DejaVu Sans','Segoe UI',Helvetica,Arial,sans-serif;fill:var(--fg)}
 .mut{fill:var(--mut)}
 .ttl{font-weight:600}

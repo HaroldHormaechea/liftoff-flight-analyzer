@@ -429,6 +429,24 @@ def cmd_report(args, sim):
         sys.exit("no moving samples in %s" % path)
     pb = pbs.pb_context(meta, args.history)
 
+    # Pit stops, before any figure is drawn: they put an icon on two of them and
+    # they decide what the crash table is allowed to contain.
+    pit_vols = sim["map"].pits_for(path, args.track_dir)
+    pit_stops = report.find_pit_stops(series, pit_vols, ranges, names, dt,
+                                      cal.PIT_MIN_S, aargs.stall_speed)
+    pit_stalls = report.drop_pit_stalls(analysed, pit_stops)
+
+    # Impacts are resolved here, before any figure is drawn, because the lap
+    # maps and the playbacks mark them. Splitting the pit landings out first is
+    # what stops a deliberate landing being drawn as a collision.
+    hits = incident_view.impacts(series, cal.IMPACT_DROP_KMH,
+                                 cal.IMPACT_DEBOUNCE_SAMPLES)
+    crashes, landings = report.find_crashes(series, hits, ranges, names, pit_vols, dt,
+                                            aargs.stall_speed)
+    # The impact markers inside a recording come from the same list, so a
+    # deliberate landing must not be drawn there as a collision either.
+    hits = [c["index"] for c in crashes]
+
     assets = outdir / "assets"
     # Clear the figures before redrawing. Every SVG in here is written by this
     # run, so anything left from a previous one is stale by definition - and a
@@ -452,7 +470,8 @@ def cmd_report(args, sim):
     # a report that shows one flight twice teaches the reader to skim.
     if len(ranges) > 1:
         figs["line"] = assets / "line.svg"
-        report.fig_line(data, ranges, names, figs["line"], "Laps overlaid")
+        report.fig_line(data, ranges, names, figs["line"], "Laps overlaid", pit_stops,
+                        crashes)
     # the headline traces and the reference traces are separate figures, so the
     # three that get read every time are not buried under the two that do not
     report.fig_traces(data, ranges, names, analysed, figs["traces"],
@@ -470,7 +489,9 @@ def cmd_report(args, sim):
             p = assets / ("anim_%s.svg" % names[k].replace(" ", ""))
             rate = report.fig_anim(data, a, b, p, "%s, played back" % names[k],
                                    meta.get("environment") or "the track", vref,
-                                   args.anim_max, args.anim_frames, args.cam_span)
+                                   args.anim_max, args.anim_frames, args.cam_span,
+                                   [q for q in pit_stops if a <= q["index"][0] < b],
+                                   [c for c in crashes if a <= c["index"] < b])
             if rate:
                 anims["laps"].append((p, rate))
 
@@ -478,9 +499,6 @@ def cmd_report(args, sim):
     # A stall used to get a flat SVG clip printed under the table; the recording
     # answers the same question in the place the reader asks it, and answers the
     # one the clip could not - what was actually around the quad.
-    hits = incident_view.impacts(series, cal.IMPACT_DROP_KMH,
-                                 cal.IMPACT_DEBOUNCE_SAMPLES)
-    crashes = report.find_crashes(series, hits, ranges, names)
     recs = {"geo": [], "props": [], "items": {}}
     if not args.no_rec and (crashes or any(e["stalls"] for e in analysed)):
         scenes = args.scenes or str(Path(args.track_dir) / "scenes")
@@ -499,7 +517,7 @@ def cmd_report(args, sim):
     report.write(md_path,
                  report.build_report(meta, data, ranges, names, analysed, pb,
                                      figs, anims, rel, kept, crashes,
-                                     set(recs["items"])))
+                                     set(recs["items"]), pit_stops))
     if kept:
         print("  kept the existing Debrief section")
     html_path = outdir / "report.html"
@@ -540,8 +558,16 @@ def cmd_report(args, sim):
         "crashes": crashes,
         "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "
                             "replay's isCrashed flag is not used, it reads false on "
-                            "flights that ended pinned against the ground"
+                            "flights that ended pinned against the ground. An impact "
+                            "inside a repair or recharge volume that the quad flew out "
+                            "of again is in pit_landings, not here; one it never flew "
+                            "out of stays here."
                             % cal.IMPACT_DROP_KMH),
+        # Deliberate landings, kept rather than dropped: the pilot asked for
+        # them not to be called crashes, not for them to become invisible.
+        "pit_landings": landings,
+        "pit_stops": pit_stops,
+        "pit_volumes": pit_vols,
         "recordings": {"in": "report.html, opened from the crash and stall tables",
                        "ids": sorted(recs["items"]),
                        "titles": {i: d.get("title") for i, d in recs["items"].items()}},
@@ -572,8 +598,9 @@ def cmd_report(args, sim):
     print("        %s" % (outdir / "analysis.json"))
     if not args.no_html:
         print("        %s" % html_path)
-    print("  %d figures, %d animations, %d segment(s), %d recording(s)"
-          % (len(figs) - 1, len(anims["laps"]), len(ranges), len(recs["items"])))
+    print("  %d figures, %d animations, %d segment(s), %d recording(s)%s"
+          % (len(figs) - 1, len(anims["laps"]), len(ranges), len(recs["items"]),
+             ", %d pit stop(s)" % len(pit_stops) if pit_stops else ""))
 
     # The report is the deliverable, so show it rather than printing a path and
     # trusting someone to follow it. Failure here is never worth aborting on:

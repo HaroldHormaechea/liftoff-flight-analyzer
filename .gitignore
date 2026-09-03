@@ -13,3 +13,6 @@ trackdata/
 build/
 dist/
 *.egg-info/
+
+# JetBrains project files
+.idea/

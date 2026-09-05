@@ -1,0 +1,336 @@
+<title>Orbit - manoeuvre</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0e1116; color:#c9d1d9;
+         font:13px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:relative; width:100vw; height:100vh; overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; cursor:grab; }
+  canvas.drag { cursor:grabbing; }
+  #hud { position:absolute; top:12px; left:14px; pointer-events:none;
+         text-shadow:0 1px 3px #000; }
+  #hud b { color:#e6edf3; font-size:15px; }
+  #hud .k { color:#8b949e; }
+  #legend { position:absolute; top:12px; right:14px; text-align:right;
+            pointer-events:none; text-shadow:0 1px 3px #000; }
+  #legend i { display:inline-block; width:10px; height:10px; margin-right:6px;
+              vertical-align:middle; border-radius:2px; }
+  #bar { position:absolute; left:0; right:0; bottom:0; padding:10px 14px 14px;
+         background:linear-gradient(transparent,#0e1116cc 40%); display:flex;
+         gap:12px; align-items:center; }
+  #bar input[type=range] { flex:1; accent-color:#4dd0c7; }
+  button { background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+           border-radius:6px; padding:5px 12px; font:inherit; cursor:pointer; }
+  button:hover { background:#30363d; }
+  #t { font-variant-numeric:tabular-nums; min-width:112px; }
+  .warn { color:#e3b341; }
+  .k2 { color:#8b949e; }
+</style>
+<div id=wrap>
+  <canvas data-fpv=canvas></canvas>
+  <div id=hud>
+    <b>Orbit</b><br>
+    <span class=k>drag to orbit &middot; wheel to zoom</span><br>
+    <span data-fpv=readout class=k></span>
+  </div>
+  <div id=legend>
+    <span><i style="background:#5b6b7f"></i>scene collider</span><br>
+    <span><i style="background:#e3b341"></i>solid track prop <span class=warn>(placeholder shape)</span></span><br>
+    <span><i style="background:#4dd0c7"></i>route checkpoint</span><br>
+    <span><i style="background:#3a4a5c"></i>pit trigger <span class=k2>(not solid, hidden)</span></span><br>
+    <span><i style="background:#f0524d"></i>impact</span>
+  </div>
+  <div id=bar>
+    <button data-fpv=play>Play</button>
+    <input data-fpv=scrub type=range min=0 max=0 step=1 value=0>
+    <span data-fpv=time id=t></span>
+    <button data-fpv=gates>Show route</button>
+    <button data-fpv=triggers>Show triggers</button>
+  </div>
+</div>
+<script>
+
+function fpvViewer(root, D){
+  const el = n => root.querySelector('[data-fpv="' + n + '"]');
+  const cv = el('canvas'), cx = cv.getContext('2d');
+  const scrub = el('scrub'), playBtn = el('play'), gatesBtn = el('gates'),
+        trigBtn = el('triggers'), readout = el('readout'), timeOut = el('time');
+  let yaw = 2.3, pitch = 0.45, dist = D.dist0, frame = D.startFrame | 0;
+  let playing = false, timer = null, alive = true;
+  /* Route checkpoints and pit volumes are both OFF by default: neither is an
+     obstacle, and the question this view answers is what the quad hit. They
+     are one button away when the route itself is what you want to see. */
+  let showTriggers = !!D.showTriggers, showGates = !!D.showGates;
+  const tgt = D.target.slice();
+
+  /* The canvas is measured, never told: it fills whatever box the page gives
+     it - the whole window on the standalone page, a modal stage in the report -
+     and a ResizeObserver catches the modal opening, which fires no resize
+     event on the window. */
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    const w = Math.max(1, Math.round(r.width || cv.clientWidth || 640));
+    const h = Math.max(1, Math.round(r.height || cv.clientHeight || 360));
+    cv.width = Math.round(w * devicePixelRatio);
+    cv.height = Math.round(h * devicePixelRatio);
+    draw();
+  }
+
+  /* Unity is LEFT-handed (+Y up), so the camera basis uses right = up x forward.
+     Using the right-handed cross product here mirrors the whole scene, which is
+     subtly wrong in a way that is hard to spot and impossible to unsee. */
+  function basis(){
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cam = [tgt[0] - dist*cp*Math.cos(yaw), tgt[1] + dist*sp, tgt[2] - dist*cp*Math.sin(yaw)];
+    let f = [tgt[0]-cam[0], tgt[1]-cam[1], tgt[2]-cam[2]];
+    const fl = Math.hypot(f[0],f[1],f[2]); f = f.map(v=>v/fl);
+    let r = [ 1*f[2] - 0*f[1], 0*f[0] - 0*f[2], 0*f[1] - 1*f[0] ];   // up(0,1,0) x f
+    const rl = Math.hypot(r[0],r[1],r[2]) || 1; r = r.map(v=>v/rl);
+    const u = [ f[1]*r[2]-f[2]*r[1], f[2]*r[0]-f[0]*r[2], f[0]*r[1]-f[1]*r[0] ];
+    return {cam, f, r, u};
+  }
+  function project(p, B, W, H, focal){
+    const v = [p[0]-B.cam[0], p[1]-B.cam[1], p[2]-B.cam[2]];
+    const z = v[0]*B.f[0]+v[1]*B.f[1]+v[2]*B.f[2];
+    if (z <= 0.05) return null;
+    const x = v[0]*B.r[0]+v[1]*B.r[1]+v[2]*B.r[2];
+    const y = v[0]*B.u[0]+v[1]*B.u[1]+v[2]*B.u[2];
+    return [W/2 + focal*x/z, H/2 - focal*y/z, z];
+  }
+  function qrot(q, v){
+    const x = q[0], y = q[1], z = q[2], w = q[3];
+    const cx1 = y*v[2]-z*v[1], cy1 = z*v[0]-x*v[2], cz1 = x*v[1]-y*v[0];
+    return [ v[0] + 2*(w*cx1 + y*cz1 - z*cy1),
+             v[1] + 2*(w*cy1 + z*cx1 - x*cz1),
+             v[2] + 2*(w*cz1 + x*cy1 - y*cx1) ];
+  }
+  function qmul(a, b){
+    return [ a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+             a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+             a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+             a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2] ];
+  }
+  const CUBE = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+  const FACES = [[0,1,2,3],[5,4,7,6],[4,0,3,7],[1,5,6,2],[3,2,6,7],[4,5,1,0]];
+
+  function boxFaces(centre, half, q, colour){
+    const pts = CUBE.map(c => {
+      let l = [c[0]*half[0], c[1]*half[1], c[2]*half[2]];
+      if (q) l = qrot(q, l);
+      return [centre[0]+l[0], centre[1]+l[1], centre[2]+l[2]];
+    });
+    return FACES.map(f => ({pts: f.map(i=>pts[i]), colour}));
+  }
+  function shade(hex, k){
+    const n = parseInt(hex.slice(1),16);
+    const r = Math.min(255,(n>>16&255)*k)|0, g = Math.min(255,(n>>8&255)*k)|0, b = Math.min(255,(n&255)*k)|0;
+    return 'rgb('+r+','+g+','+b+')';
+  }
+  const LIGHT = (function(){ const v=[0.4,0.85,0.3], l=Math.hypot(v[0],v[1],v[2]);
+                             return v.map(x=>x/l); })();
+  function normal(p){
+    const a=[p[1][0]-p[0][0],p[1][1]-p[0][1],p[1][2]-p[0][2]];
+    const b=[p[2][0]-p[0][0],p[2][1]-p[0][1],p[2][2]-p[0][2]];
+    const n=[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+    const l=Math.hypot(n[0],n[1],n[2])||1; return n.map(v=>v/l);
+  }
+  function ramp(v){
+    const k = Math.max(0, Math.min(1, v / D.vref));
+    return k < 0.5 ? 'rgb('+(240)+','+(82+120*k*2)+','+(77+20*k*2)+')'
+                   : 'rgb('+(240-163*(k-0.5)*2)+','+(202+6*(k-0.5)*2)+','+(97+102*(k-0.5)*2)+')';
+  }
+
+  function draw(){
+    const W = cv.width, H = cv.height, focal = H * 0.9;
+    const B = basis();
+    cx.fillStyle = D.bg || '#0e1116'; cx.fillRect(0,0,W,H);
+
+    const polys = [];
+    for (const c of D.colliders){
+      if (c.t === 'box') polys.push(...boxFaces(c.p, c.s, c.q, '#5b6b7f'));
+      else if (c.t === 'cap'){
+        const h = [c.r, c.r, c.r]; h[c.a] = Math.max(c.h/2, c.r);
+        polys.push(...boxFaces(c.p, h, c.q, '#556077'));
+      } else polys.push(...boxFaces(c.p, [c.r,c.r,c.r], null, '#556077'));
+    }
+    for (const p of D.props){
+      if (p.k === 'trigger' && !showTriggers) continue;
+      if (p.k === 'gate' && !showGates) continue;
+      const a = p.yaw * Math.PI/180, s = Math.sin(a/2), cc = Math.cos(a/2);
+      const q = [0,s,0,cc];
+      const colour = p.k === 'gate' ? '#4dd0c7' : p.k === 'trigger' ? '#3a4a5c' : '#e3b341';
+      if (p.sh && p.sh.length){
+        /* Real prefab colliders, in the item's own frame: an instance is only ever
+           the Track XML's position and yaw applied to that shape. */
+        for (const c of p.sh){
+          const l = c.p ? qrot(q, c.p) : [0,0,0];
+          const w = [p.p[0]+l[0], p.p[1]+l[1], p.p[2]+l[2]];
+          if (c.t === 'mesh'){
+            /* Real triangles. A ramp's hull is two of them; its bounding box would
+               be a slab with two vertical walls the game does not have. */
+            for (const f of c.f){
+              polys.push({pts: f.map(i => {
+                const lv = qrot(q, c.v[i]);
+                return [p.p[0]+lv[0], p.p[1]+lv[1], p.p[2]+lv[2]];
+              }), colour: colour, twoSided: true});
+            }
+            continue;
+          }
+          if (c.t === 'box')      polys.push(...boxFaces(w, c.s, qmul(q, c.q), colour));
+          else if (c.t === 'sph') polys.push(...boxFaces(w, [c.r,c.r,c.r], q, colour));
+          else { const h = [c.r,c.r,c.r]; h[c.a] = Math.max(c.h/2, c.r);
+                 polys.push(...boxFaces(w, h, qmul(q, c.q), colour)); }
+        }
+      } else {
+        /* Shape unknown - a mesh-only prefab. Drawn dimmer: a marker saying
+           something is here, not a claim about what it looks like. */
+        polys.push(...boxFaces(p.p, D.propSize, q, p.k === 'prop' ? '#8a6d2f' : colour));
+      }
+    }
+
+    const drawable = [];
+    for (const poly of polys){
+      const sp = poly.pts.map(p => project(p, B, W, H, focal));
+      if (sp.some(p => !p)) continue;
+      const ax = sp[1][0]-sp[0][0], ay = sp[1][1]-sp[0][1];
+      const bx = sp[2][0]-sp[0][0], by = sp[2][1]-sp[0][1];
+      const facing = ax*by - ay*bx;
+      if (facing <= 0 && !poly.twoSided) continue;           // back face
+      if (facing === 0) continue;                            // edge-on, no area
+      const n = normal(poly.pts);
+      const lit = 0.45 + 0.55*Math.abs(n[0]*LIGHT[0]+n[1]*LIGHT[1]+n[2]*LIGHT[2]);
+      drawable.push({sp: sp, z: sp.reduce((a,p)=>a+p[2],0)/sp.length,
+                     fill: shade(poly.colour, lit)});
+    }
+    drawable.sort((a,b)=>b.z-a.z);
+    cx.lineWidth = devicePixelRatio;
+    for (const d of drawable){
+      cx.beginPath(); cx.moveTo(d.sp[0][0], d.sp[0][1]);
+      for (let i=1;i<d.sp.length;i++) cx.lineTo(d.sp[i][0], d.sp[i][1]);
+      cx.closePath(); cx.fillStyle = d.fill; cx.fill();
+      cx.strokeStyle = 'rgba(0,0,0,.45)'; cx.stroke();
+    }
+
+    // flight path, coloured by speed
+    cx.lineWidth = 3*devicePixelRatio; cx.lineCap = 'round';
+    for (let i=1;i<D.path.length;i++){
+      const a = project(D.path[i-1].p, B, W, H, focal), b = project(D.path[i].p, B, W, H, focal);
+      if (!a || !b) continue;
+      cx.beginPath(); cx.moveTo(a[0],a[1]); cx.lineTo(b[0],b[1]);
+      cx.strokeStyle = ramp(D.path[i].v); cx.globalAlpha = i <= frame ? 1 : 0.28; cx.stroke();
+    }
+    cx.globalAlpha = 1;
+
+    for (const i of D.impacts){
+      const p = project(D.path[i].p, B, W, H, focal);
+      if (!p) continue;
+      /* A filled red disc with a white X - the same mark the lap maps and the
+         playbacks use for an impact, so one shape means "crash" everywhere in
+         the report rather than three. */
+      const rr = Math.max(6, 260/p[2]) * devicePixelRatio;
+      cx.beginPath(); cx.arc(p[0],p[1],rr,0,7); cx.fillStyle='#f0524d'; cx.fill();
+      const a = rr*0.45;
+      cx.beginPath();
+      cx.moveTo(p[0]-a,p[1]-a); cx.lineTo(p[0]+a,p[1]+a);
+      cx.moveTo(p[0]+a,p[1]-a); cx.lineTo(p[0]-a,p[1]+a);
+      cx.strokeStyle='#ffffff'; cx.lineWidth=Math.max(1.5, rr*0.24);
+      cx.lineCap='round'; cx.stroke(); cx.lineCap='butt';
+    }
+
+    // the quad: a small body at its true attitude, plus a nose arrow
+    const s = D.path[frame];
+    for (const poly of boxFaces(s.p, [0.16,0.06,0.16], s.q, '#e6edf3')){
+      const sp = poly.pts.map(p=>project(p,B,W,H,focal));
+      if (sp.some(p=>!p)) continue;
+      cx.beginPath(); cx.moveTo(sp[0][0],sp[0][1]);
+      for (let i=1;i<sp.length;i++) cx.lineTo(sp[i][0],sp[i][1]);
+      cx.closePath(); cx.fillStyle='#e6edf3'; cx.fill();
+    }
+    const nose = qrot(s.q, [0,0,1.4]);
+    const a = project(s.p, B, W, H, focal);
+    const b = project([s.p[0]+nose[0], s.p[1]+nose[1], s.p[2]+nose[2]], B, W, H, focal);
+    if (a && b){
+      cx.beginPath(); cx.moveTo(a[0],a[1]); cx.lineTo(b[0],b[1]);
+      cx.strokeStyle='#4dd0c7'; cx.lineWidth=3*devicePixelRatio; cx.stroke();
+    }
+    if (readout) readout.textContent = s.v.toFixed(0)+' km/h   height '+s.p[1].toFixed(2)+' m';
+    if (timeOut) timeOut.textContent = 't = '+s.t.toFixed(1)+' s';
+  }
+
+  function seek(f){
+    frame = Math.max(0, Math.min(D.path.length-1, f|0));
+    if (scrub) scrub.value = frame;
+    draw();
+  }
+  function setPlaying(on){
+    playing = !!on;
+    if (playBtn) playBtn.textContent = playing ? 'Pause' : 'Play';
+    if (timer){ clearTimeout(timer); timer = null; }
+    if (playing) tick();
+  }
+  function tick(){
+    if (!playing || !alive) return;
+    /* A recording sitting on its last frame and asked to play again starts
+       over rather than doing nothing. */
+    frame = (frame + 1) % D.path.length;
+    if (scrub) scrub.value = frame;
+    draw();
+    timer = setTimeout(()=>requestAnimationFrame(tick), 90);
+  }
+
+  if (scrub){
+    scrub.max = D.path.length - 1; scrub.value = frame;
+    scrub.addEventListener('input', ()=>{ setPlaying(false); seek(+scrub.value); });
+  }
+  if (playBtn) playBtn.addEventListener('click', ()=>setPlaying(!playing));
+  if (gatesBtn){
+    gatesBtn.textContent = showGates ? 'Hide route' : 'Show route';
+    gatesBtn.addEventListener('click', ()=>{
+      showGates = !showGates;
+      gatesBtn.textContent = showGates ? 'Hide route' : 'Show route'; draw();
+    });
+  }
+  if (trigBtn){
+    trigBtn.textContent = showTriggers ? 'Hide triggers' : 'Show triggers';
+    trigBtn.addEventListener('click', ()=>{
+      showTriggers = !showTriggers;
+      trigBtn.textContent = showTriggers ? 'Hide triggers' : 'Show triggers'; draw();
+    });
+  }
+  if (playBtn) playBtn.textContent = 'Play';
+
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY];
+    cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointerup', () => { drag = null; cv.classList.remove('drag'); });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    yaw += (e.clientX - drag[0]) * 0.008;
+    pitch = Math.max(-1.4, Math.min(1.4, pitch + (e.clientY - drag[1]) * 0.006));
+    drag = [e.clientX, e.clientY]; draw();
+  });
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    dist = Math.max(2, Math.min(400, dist * (e.deltaY > 0 ? 1.12 : 0.89))); draw();
+  }, {passive:false});
+
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(()=>resize()) : null;
+  if (ro) ro.observe(cv);
+  addEventListener('resize', resize);
+  resize();
+
+  return {
+    draw: draw, resize: resize, seek: seek,
+    play: ()=>setPlaying(true), pause: ()=>setPlaying(false),
+    /* Closing a modal must stop the loop it started. Without this, every
+       recording ever opened keeps drawing into a detached canvas. */
+    destroy: function(){
+      alive = false; playing = false;
+      if (timer){ clearTimeout(timer); timer = null; }
+      if (ro) ro.disconnect();
+      removeEventListener('resize', resize);
+    }
+  };
+}
+
+fpvViewer(document.getElementById('wrap'), {"colliders":[],"props":[],"propSize":[0.6,1.0,0.6],"path":[{"t":0.0,"p":[0.0,2.0,5.0],"q":[-0.2335,0.9724,0.0,-0.0],"v":18.0},{"t":0.1,"p":[0.499,2.0,4.975],"q":[-0.2332,0.9711,0.0117,-0.0486],"v":18.0},{"t":0.2,"p":[0.993,2.0,4.9],"q":[-0.2323,0.9675,0.0233,-0.0971],"v":18.0},{"t":0.3,"p":[1.478,2.0,4.777],"q":[-0.2309,0.9614,0.0349,-0.1453],"v":18.0},{"t":0.4,"p":[1.947,2.0,4.605],"q":[-0.2289,0.953,0.0464,-0.1932],"v":18.0},{"t":0.5,"p":[2.397,2.0,4.388],"q":[-0.2262,0.9421,0.0578,-0.2406],"v":18.0},{"t":0.6,"p":[2.823,2.0,4.127],"q":[-0.2231,0.9289,0.069,-0.2874],"v":18.0},{"t":0.7,"p":[3.221,2.0,3.824],"q":[-0.2193,0.9134,0.0801,-0.3334],"v":18.0},{"t":0.8,"p":[3.587,2.0,3.484],"q":[-0.2151,0.8956,0.0909,-0.3787],"v":18.0},{"t":0.9,"p":[3.917,2.0,3.108],"q":[-0.2103,0.8756,0.1016,-0.4229],"v":18.0},{"t":1.0,"p":[4.207,2.0,2.702],"q":[-0.2049,0.8533,0.1119,-0.4662],"v":18.0},{"t":1.1,"p":[4.456,2.0,2.268],"q":[0.1991,-0.829,-0.1221,0.5082],"v":18.0},{"t":1.2,"p":[4.66,2.0,1.812],"q":[0.1927,-0.8025,-0.1318,0.549],"v":18.0},{"t":1.3,"p":[4.818,2.0,1.337],"q":[0.1859,-0.7741,-0.1413,0.5885],"v":18.0},{"t":1.4,"p":[4.927,2.0,0.85],"q":[0.1786,-0.7437,-0.1504,0.6264],"v":18.0},{"t":1.5,"p":[4.987,2.0,0.354],"q":[0.1709,-0.7115,-0.1592,0.6628],"v":18.0},{"t":1.6,"p":[4.998,2.0,-0.146],"q":[0.1627,-0.6774,-0.1675,0.6975],"v":18.0},{"t":1.7,"p":[4.958,2.0,-0.644],"q":[0.1541,-0.6417,-0.1754,0.7305],"v":18.0},{"t":1.8,"p":[4.869,2.0,-1.136],"q":[0.1452,-0.6044,-0.1829,0.7617],"v":18.0},{"t":1.9,"p":[4.732,2.0,-1.616],"q":[0.1358,-0.5656,-0.1899,0.7909],"v":18.0},{"t":2.0,"p":[4.546,2.0,-2.081],"q":[0.1262,-0.5254,-0.1965,0.8182],"v":18.0},{"t":2.1,"p":[4.316,2.0,-2.524],"q":[0.1162,-0.4838,-0.2025,0.8434],"v":18.0},{"t":2.2,"p":[4.042,2.0,-2.943],"q":[0.1059,-0.4411,-0.2081,0.8666],"v":18.0},{"t":2.3,"p":[3.729,2.0,-3.331],"q":[0.0954,-0.3972,-0.2131,0.8875],"v":18.0},{"t":2.4,"p":[3.377,2.0,-3.687],"q":[0.0846,-0.3523,-0.2176,0.9063],"v":18.0},{"t":2.5,"p":[2.992,2.0,-4.006],"q":[0.0736,-0.3066,-0.2216,0.9228],"v":18.0},{"t":2.6,"p":[2.578,2.0,-4.284],"q":[0.0625,-0.2601,-0.225,0.9369],"v":18.0},{"t":2.7,"p":[2.137,2.0,-4.52],"q":[0.0511,-0.213,-0.2278,0.9487],"v":18.0},{"t":2.8,"p":[1.675,2.0,-4.711],"q":[0.0397,-0.1653,-0.2301,0.9582],"v":18.0},{"t":2.9,"p":[1.196,2.0,-4.855],"q":[0.0281,-0.1172,-0.2318,0.9653],"v":18.0},{"t":3.0,"p":[0.706,2.0,-4.95],"q":[0.0165,-0.0688,-0.2329,0.9699],"v":18.0},{"t":3.1,"p":[0.208,2.0,-4.996],"q":[0.0049,-0.0202,-0.2335,0.9721],"v":18.0},{"t":3.2,"p":[-0.292,2.0,-4.991],"q":[-0.0068,0.0284,-0.2334,0.9719],"v":18.0},{"t":3.3,"p":[-0.789,2.0,-4.937],"q":[-0.0185,0.0769,-0.2328,0.9693],"v":18.0},{"t":3.4,"p":[-1.278,2.0,-4.834],"q":[-0.0301,0.1253,-0.2316,0.9643],"v":18.0},{"t":3.5,"p":[-1.754,2.0,-4.682],"q":[-0.0416,0.1733,-0.2298,0.9568],"v":18.0},{"t":3.6,"p":[-2.213,2.0,-4.484],"q":[-0.0531,0.2209,-0.2274,0.9469],"v":18.0},{"t":3.7,"p":[-2.649,2.0,-4.241],"q":[-0.0644,0.268,-0.2245,0.9347],"v":18.0},{"t":3.8,"p":[-3.059,2.0,-3.955],"q":[-0.0755,0.3144,-0.221,0.9201],"v":18.0},{"t":3.9,"p":[-3.439,2.0,-3.63],"q":[-0.0864,0.3599,-0.2169,0.9033],"v":18.0},{"t":4.0,"p":[-3.784,2.0,-3.268],"q":[-0.0972,0.4046,-0.2123,0.8842],"v":18.0},{"t":4.1,"p":[-4.091,2.0,-2.874],"q":[-0.1077,0.4483,-0.2072,0.8628],"v":18.0},{"t":4.2,"p":[-4.358,2.0,-2.451],"q":[-0.1179,0.4909,-0.2016,0.8393],"v":18.0},{"t":4.3,"p":[-4.581,2.0,-2.004],"q":[-0.1278,0.5322,-0.1954,0.8138],"v":18.0},{"t":4.4,"p":[-4.758,2.0,-1.537],"q":[-0.1374,0.5722,-0.1888,0.7861],"v":18.0},{"t":4.5,"p":[-4.888,2.0,-1.054],"q":[-0.1467,0.6108,-0.1817,0.7566],"v":18.0},{"t":4.6,"p":[-4.968,2.0,-0.561],"q":[-0.1556,0.6479,-0.1741,0.7251],"v":18.0},{"t":4.7,"p":[-5.0,2.0,-0.062],"q":[-0.1641,0.6833,-0.1661,0.6918],"v":18.0},{"t":4.8,"p":[-4.981,2.0,0.437],"q":[-0.1722,0.717,-0.1577,0.6568],"v":18.0},{"t":4.9,"p":[-4.912,2.0,0.933],"q":[-0.1799,0.7489,-0.1489,0.6201],"v":18.0},{"t":5.0,"p":[-4.795,2.0,1.418],"q":[-0.1871,0.779,-0.1397,0.5819],"v":18.0},{"t":5.1,"p":[-4.629,2.0,1.89],"q":[-0.1938,0.8071,-0.1302,0.5423],"v":18.0},{"t":5.2,"p":[-4.417,2.0,2.343],"q":[-0.2001,0.8332,-0.1204,0.5013],"v":18.0},{"t":5.3,"p":[-4.161,2.0,2.772],"q":[-0.2059,0.8572,-0.1102,0.459],"v":18.0},{"t":5.4,"p":[-3.864,2.0,3.173],"q":[-0.2111,0.8791,-0.0998,0.4156],"v":18.0},{"t":5.5,"p":[-3.528,2.0,3.543],"q":[-0.2158,0.8988,-0.0891,0.3711],"v":18.0},{"t":5.6,"p":[-3.156,2.0,3.878],"q":[-0.22,0.9162,-0.0782,0.3257],"v":18.0},{"t":5.7,"p":[-2.753,2.0,4.174],"q":[-0.2236,0.9313,-0.0671,0.2795],"v":18.0},{"t":5.8,"p":[-2.323,2.0,4.428],"q":[-0.2267,0.9441,-0.0559,0.2326],"v":18.0},{"t":5.9,"p":[-1.869,2.0,4.637],"q":[-0.2292,0.9546,-0.0445,0.1852],"v":18.0},{"t":6.0,"p":[-1.397,2.0,4.801],"q":[-0.2312,0.9626,-0.033,0.1372],"v":18.0},{"t":6.1,"p":[-0.911,2.0,4.916],"q":[-0.2325,0.9683,-0.0214,0.0889],"v":18.0},{"t":6.2,"p":[-0.415,2.0,4.983],"q":[-0.2333,0.9715,-0.0097,0.0404],"v":18.0},{"t":6.3,"p":[0.084,2.0,4.999],"q":[-0.2335,0.9723,0.002,-0.0082],"v":18.0},{"t":6.4,"p":[0.583,2.0,4.966],"q":[-0.2331,0.9707,0.0136,-0.0568],"v":18.0},{"t":6.5,"p":[1.076,2.0,4.883],"q":[-0.2321,0.9666,0.0253,-0.1052],"v":18.0},{"t":6.6,"p":[1.558,2.0,4.751],"q":[-0.2306,0.9602,0.0368,-0.1534],"v":18.0},{"t":6.7,"p":[2.024,2.0,4.572],"q":[-0.2285,0.9513,0.0483,-0.2012],"v":18.0},{"t":6.8,"p":[2.471,2.0,4.347],"q":[-0.2258,0.9401,0.0597,-0.2485],"v":18.0},{"t":6.9,"p":[2.892,2.0,4.079],"q":[-0.2225,0.9265,0.0709,-0.2952],"v":18.0},{"t":7.0,"p":[3.285,2.0,3.77],"q":[-0.2187,0.9106,0.0819,-0.3411],"v":18.0},{"t":7.1,"p":[3.645,2.0,3.423],"q":[-0.2143,0.8924,0.0927,-0.3862],"v":18.0},{"t":7.2,"p":[3.968,2.0,3.042],"q":[-0.2094,0.872,0.1033,-0.4303],"v":18.0},{"t":7.3,"p":[4.252,2.0,2.63],"q":[-0.204,0.8494,0.1137,-0.4733],"v":18.0},{"t":7.4,"p":[4.494,2.0,2.193],"q":[0.198,-0.8247,-0.1237,0.5152],"v":18.0},{"t":7.5,"p":[4.69,2.0,1.733],"q":[0.1916,-0.7979,-0.1335,0.5558],"v":18.0},{"t":7.6,"p":[4.84,2.0,1.256],"q":[0.1847,-0.7691,-0.1429,0.5949],"v":18.0},{"t":7.7,"p":[4.941,2.0,0.767],"q":[0.1773,-0.7384,-0.1519,0.6326],"v":18.0},{"t":7.8,"p":[4.993,2.0,0.27],"q":[0.1695,-0.7059,-0.1606,0.6688],"v":18.0},{"t":7.9,"p":[4.995,2.0,-0.23],"q":[0.1613,-0.6716,-0.1689,0.7032],"v":18.0},{"t":8.0,"p":[4.947,2.0,-0.728],"q":[0.1526,-0.6356,-0.1767,0.7359],"v":18.0}],"impacts":[],"target":[-3.78,2.0,-3.27],"dist0":17.0,"vref":30.0,"startFrame":0,"showGates":false,"showTriggers":false,"note":"Nose pinned to one point while the path bends around it. Roll holds the bank, yaw keeps the nose on the object, throttle holds the height. Nothing here is new to you - it is the racing corner with the nose turned inward instead of forward."});
+</script>

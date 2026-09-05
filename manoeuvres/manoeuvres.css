@@ -1,0 +1,16 @@
+.fpv-man{background:#0e1116;color:#c9d1d9;border-radius:10px;overflow:hidden;
+ font:13px/1.5 ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;margin:18px 0}
+.fpv-man .fpv-head{padding:12px 14px 0}
+.fpv-man .fpv-head b{color:#e6edf3;font-size:15px}
+.fpv-man .fpv-head p{margin:6px 0 0;color:#8b949e;max-width:70ch}
+.fpv-man .fpv-stage{position:relative;height:340px}
+.fpv-man canvas{display:block;width:100%;height:100%;cursor:grab}
+.fpv-man canvas.drag{cursor:grabbing}
+.fpv-man .fpv-hint{position:absolute;top:10px;left:14px;color:#8b949e;
+ pointer-events:none;text-shadow:0 1px 3px #000}
+.fpv-man .fpv-bar{display:flex;gap:12px;align-items:center;padding:0 14px 12px}
+.fpv-man .fpv-bar input[type=range]{flex:1;accent-color:#4dd0c7}
+.fpv-man button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;
+ border-radius:6px;padding:5px 12px;font:inherit;cursor:pointer}
+.fpv-man button:hover{background:#30363d}
+.fpv-man .fpv-t{font-variant-numeric:tabular-nums;min-width:104px;color:#8b949e}

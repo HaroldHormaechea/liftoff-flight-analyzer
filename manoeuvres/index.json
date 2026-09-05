@@ -1,0 +1,170 @@
+[
+ {
+  "slug": "orbit",
+  "title": "Orbit",
+  "note": "Nose pinned to one point while the path bends around it. Roll holds the bank, yaw keeps the nose on the object, throttle holds the height. Nothing here is new to you - it is the racing corner with the nose turned inward instead of forward.",
+  "plane": "top",
+  "secs": 8.0,
+  "samples": 81,
+  "speed_max": 18.0,
+  "height": [
+   2.0,
+   2.0
+  ],
+  "inverted_pct": 0,
+  "files": {
+   "svg": "orbit.svg",
+   "fragment": "orbit.fragment.html",
+   "bare": "orbit.bare.html",
+   "page": "orbit.html",
+   "data": "orbit.json"
+  }
+ },
+ {
+  "slug": "figure-eight",
+  "title": "Figure eight",
+  "note": "Two opposed circles joined at the crossing, flown nose-forward. The roll has to reverse through zero at the join without the height moving. This is the drill that finds a lazy throttle hand.",
+  "plane": "top",
+  "secs": 10.0,
+  "samples": 101,
+  "speed_max": 18.0,
+  "height": [
+   2.0,
+   2.0
+  ],
+  "inverted_pct": 0,
+  "files": {
+   "svg": "figure-eight.svg",
+   "fragment": "figure-eight.fragment.html",
+   "bare": "figure-eight.bare.html",
+   "page": "figure-eight.html",
+   "data": "figure-eight.json"
+  }
+ },
+ {
+  "slug": "axial-roll",
+  "title": "Axial roll",
+  "note": "360 degrees about the nose axis in a straight line. The path does not bend - if it does, you are steering with the roll instead of rolling around the line. Throttle comes off as the horizon goes over and back on as it comes round.",
+  "plane": "side",
+  "secs": 4.0,
+  "samples": 41,
+  "speed_max": 36.0,
+  "height": [
+   3.0,
+   3.0
+  ],
+  "inverted_pct": 24,
+  "files": {
+   "svg": "axial-roll.svg",
+   "fragment": "axial-roll.fragment.html",
+   "bare": "axial-roll.bare.html",
+   "page": "axial-roll.html",
+   "data": "axial-roll.json"
+  }
+ },
+ {
+  "slug": "backflip",
+  "title": "Backflip",
+  "note": "A full loop pulled backwards. Thrust points at the centre of the loop the whole way round, which is why the throttle goes UP over the top rather than off. Level in, level out, inverted halfway.",
+  "plane": "side",
+  "secs": 2.6,
+  "samples": 27,
+  "speed_max": 21.7,
+  "height": [
+   2.0,
+   6.5
+  ],
+  "inverted_pct": 48,
+  "files": {
+   "svg": "backflip.svg",
+   "fragment": "backflip.fragment.html",
+   "bare": "backflip.bare.html",
+   "page": "backflip.html",
+   "data": "backflip.json"
+  }
+ },
+ {
+  "slug": "split-s",
+  "title": "Split-S",
+  "note": "Half roll to inverted, then pull through. Reverses your direction and costs you height - about twice the loop radius. The way to turn round in a space too tight to bank in.",
+  "plane": "side",
+  "secs": 3.7,
+  "samples": 38,
+  "speed_max": 41.1,
+  "height": [
+   4.0,
+   12.0
+  ],
+  "inverted_pct": 50,
+  "files": {
+   "svg": "split-s.svg",
+   "fragment": "split-s.fragment.html",
+   "bare": "split-s.bare.html",
+   "page": "split-s.html",
+   "data": "split-s.json"
+  }
+ },
+ {
+  "slug": "immelmann",
+  "title": "Immelmann",
+  "note": "The split-S backwards: half loop up, then half roll upright. Reverses direction and buys height. Pair it with the split-S and you can reverse either way without ever flying a flat turn.",
+  "plane": "side",
+  "secs": 3.7,
+  "samples": 38,
+  "speed_max": 32.4,
+  "height": [
+   3.0,
+   11.0
+  ],
+  "inverted_pct": 50,
+  "files": {
+   "svg": "immelmann.svg",
+   "fragment": "immelmann.fragment.html",
+   "bare": "immelmann.bare.html",
+   "page": "immelmann.html",
+   "data": "immelmann.json"
+  }
+ },
+ {
+  "slug": "power-loop",
+  "title": "Power loop",
+  "note": "Up the near face of an obstacle, inverted over the top, down the far side. The loop is just a loop; what makes it a power loop is that the object is inside it.",
+  "plane": "side",
+  "secs": 6.8,
+  "samples": 69,
+  "speed_max": 39.6,
+  "height": [
+   1.5,
+   8.5
+  ],
+  "inverted_pct": 25,
+  "files": {
+   "svg": "power-loop.svg",
+   "fragment": "power-loop.fragment.html",
+   "bare": "power-loop.bare.html",
+   "page": "power-loop.html",
+   "data": "power-loop.json"
+  }
+ },
+ {
+  "slug": "dive",
+  "title": "Dive and pull-out",
+  "note": "Nose over, let it accelerate down a face, pull out level. Pitch sets how steep, throttle sets how fast you arrive - the manoeuvre where 'throttle is height, pitch is speed' either has landed or has not.",
+  "plane": "side",
+  "secs": 3.2,
+  "samples": 33,
+  "speed_max": 34.2,
+  "height": [
+   0.0,
+   18.0
+  ],
+  "inverted_pct": 0,
+  "files": {
+   "svg": "dive.svg",
+   "fragment": "dive.fragment.html",
+   "bare": "dive.bare.html",
+   "page": "dive.html",
+   "data": "dive.json"
+  }
+ }
+]

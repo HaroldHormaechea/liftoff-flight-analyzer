@@ -1,0 +1,336 @@
+<title>Figure eight - manoeuvre</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0e1116; color:#c9d1d9;
+         font:13px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:relative; width:100vw; height:100vh; overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; cursor:grab; }
+  canvas.drag { cursor:grabbing; }
+  #hud { position:absolute; top:12px; left:14px; pointer-events:none;
+         text-shadow:0 1px 3px #000; }
+  #hud b { color:#e6edf3; font-size:15px; }
+  #hud .k { color:#8b949e; }
+  #legend { position:absolute; top:12px; right:14px; text-align:right;
+            pointer-events:none; text-shadow:0 1px 3px #000; }
+  #legend i { display:inline-block; width:10px; height:10px; margin-right:6px;
+              vertical-align:middle; border-radius:2px; }
+  #bar { position:absolute; left:0; right:0; bottom:0; padding:10px 14px 14px;
+         background:linear-gradient(transparent,#0e1116cc 40%); display:flex;
+         gap:12px; align-items:center; }
+  #bar input[type=range] { flex:1; accent-color:#4dd0c7; }
+  button { background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+           border-radius:6px; padding:5px 12px; font:inherit; cursor:pointer; }
+  button:hover { background:#30363d; }
+  #t { font-variant-numeric:tabular-nums; min-width:112px; }
+  .warn { color:#e3b341; }
+  .k2 { color:#8b949e; }
+</style>
+<div id=wrap>
+  <canvas data-fpv=canvas></canvas>
+  <div id=hud>
+    <b>Figure eight</b><br>
+    <span class=k>drag to orbit &middot; wheel to zoom</span><br>
+    <span data-fpv=readout class=k></span>
+  </div>
+  <div id=legend>
+    <span><i style="background:#5b6b7f"></i>scene collider</span><br>
+    <span><i style="background:#e3b341"></i>solid track prop <span class=warn>(placeholder shape)</span></span><br>
+    <span><i style="background:#4dd0c7"></i>route checkpoint</span><br>
+    <span><i style="background:#3a4a5c"></i>pit trigger <span class=k2>(not solid, hidden)</span></span><br>
+    <span><i style="background:#f0524d"></i>impact</span>
+  </div>
+  <div id=bar>
+    <button data-fpv=play>Play</button>
+    <input data-fpv=scrub type=range min=0 max=0 step=1 value=0>
+    <span data-fpv=time id=t></span>
+    <button data-fpv=gates>Show route</button>
+    <button data-fpv=triggers>Show triggers</button>
+  </div>
+</div>
+<script>
+
+function fpvViewer(root, D){
+  const el = n => root.querySelector('[data-fpv="' + n + '"]');
+  const cv = el('canvas'), cx = cv.getContext('2d');
+  const scrub = el('scrub'), playBtn = el('play'), gatesBtn = el('gates'),
+        trigBtn = el('triggers'), readout = el('readout'), timeOut = el('time');
+  let yaw = 2.3, pitch = 0.45, dist = D.dist0, frame = D.startFrame | 0;
+  let playing = false, timer = null, alive = true;
+  /* Route checkpoints and pit volumes are both OFF by default: neither is an
+     obstacle, and the question this view answers is what the quad hit. They
+     are one button away when the route itself is what you want to see. */
+  let showTriggers = !!D.showTriggers, showGates = !!D.showGates;
+  const tgt = D.target.slice();
+
+  /* The canvas is measured, never told: it fills whatever box the page gives
+     it - the whole window on the standalone page, a modal stage in the report -
+     and a ResizeObserver catches the modal opening, which fires no resize
+     event on the window. */
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    const w = Math.max(1, Math.round(r.width || cv.clientWidth || 640));
+    const h = Math.max(1, Math.round(r.height || cv.clientHeight || 360));
+    cv.width = Math.round(w * devicePixelRatio);
+    cv.height = Math.round(h * devicePixelRatio);
+    draw();
+  }
+
+  /* Unity is LEFT-handed (+Y up), so the camera basis uses right = up x forward.
+     Using the right-handed cross product here mirrors the whole scene, which is
+     subtly wrong in a way that is hard to spot and impossible to unsee. */
+  function basis(){
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cam = [tgt[0] - dist*cp*Math.cos(yaw), tgt[1] + dist*sp, tgt[2] - dist*cp*Math.sin(yaw)];
+    let f = [tgt[0]-cam[0], tgt[1]-cam[1], tgt[2]-cam[2]];
+    const fl = Math.hypot(f[0],f[1],f[2]); f = f.map(v=>v/fl);
+    let r = [ 1*f[2] - 0*f[1], 0*f[0] - 0*f[2], 0*f[1] - 1*f[0] ];   // up(0,1,0) x f
+    const rl = Math.hypot(r[0],r[1],r[2]) || 1; r = r.map(v=>v/rl);
+    const u = [ f[1]*r[2]-f[2]*r[1], f[2]*r[0]-f[0]*r[2], f[0]*r[1]-f[1]*r[0] ];
+    return {cam, f, r, u};
+  }
+  function project(p, B, W, H, focal){
+    const v = [p[0]-B.cam[0], p[1]-B.cam[1], p[2]-B.cam[2]];
+    const z = v[0]*B.f[0]+v[1]*B.f[1]+v[2]*B.f[2];
+    if (z <= 0.05) return null;
+    const x = v[0]*B.r[0]+v[1]*B.r[1]+v[2]*B.r[2];
+    const y = v[0]*B.u[0]+v[1]*B.u[1]+v[2]*B.u[2];
+    return [W/2 + focal*x/z, H/2 - focal*y/z, z];
+  }
+  function qrot(q, v){
+    const x = q[0], y = q[1], z = q[2], w = q[3];
+    const cx1 = y*v[2]-z*v[1], cy1 = z*v[0]-x*v[2], cz1 = x*v[1]-y*v[0];
+    return [ v[0] + 2*(w*cx1 + y*cz1 - z*cy1),
+             v[1] + 2*(w*cy1 + z*cx1 - x*cz1),
+             v[2] + 2*(w*cz1 + x*cy1 - y*cx1) ];
+  }
+  function qmul(a, b){
+    return [ a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+             a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+             a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+             a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2] ];
+  }
+  const CUBE = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+  const FACES = [[0,1,2,3],[5,4,7,6],[4,0,3,7],[1,5,6,2],[3,2,6,7],[4,5,1,0]];
+
+  function boxFaces(centre, half, q, colour){
+    const pts = CUBE.map(c => {
+      let l = [c[0]*half[0], c[1]*half[1], c[2]*half[2]];
+      if (q) l = qrot(q, l);
+      return [centre[0]+l[0], centre[1]+l[1], centre[2]+l[2]];
+    });
+    return FACES.map(f => ({pts: f.map(i=>pts[i]), colour}));
+  }
+  function shade(hex, k){
+    const n = parseInt(hex.slice(1),16);
+    const r = Math.min(255,(n>>16&255)*k)|0, g = Math.min(255,(n>>8&255)*k)|0, b = Math.min(255,(n&255)*k)|0;
+    return 'rgb('+r+','+g+','+b+')';
+  }
+  const LIGHT = (function(){ const v=[0.4,0.85,0.3], l=Math.hypot(v[0],v[1],v[2]);
+                             return v.map(x=>x/l); })();
+  function normal(p){
+    const a=[p[1][0]-p[0][0],p[1][1]-p[0][1],p[1][2]-p[0][2]];
+    const b=[p[2][0]-p[0][0],p[2][1]-p[0][1],p[2][2]-p[0][2]];
+    const n=[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+    const l=Math.hypot(n[0],n[1],n[2])||1; return n.map(v=>v/l);
+  }
+  function ramp(v){
+    const k = Math.max(0, Math.min(1, v / D.vref));
+    return k < 0.5 ? 'rgb('+(240)+','+(82+120*k*2)+','+(77+20*k*2)+')'
+                   : 'rgb('+(240-163*(k-0.5)*2)+','+(202+6*(k-0.5)*2)+','+(97+102*(k-0.5)*2)+')';
+  }
+
+  function draw(){
+    const W = cv.width, H = cv.height, focal = H * 0.9;
+    const B = basis();
+    cx.fillStyle = D.bg || '#0e1116'; cx.fillRect(0,0,W,H);
+
+    const polys = [];
+    for (const c of D.colliders){
+      if (c.t === 'box') polys.push(...boxFaces(c.p, c.s, c.q, '#5b6b7f'));
+      else if (c.t === 'cap'){
+        const h = [c.r, c.r, c.r]; h[c.a] = Math.max(c.h/2, c.r);
+        polys.push(...boxFaces(c.p, h, c.q, '#556077'));
+      } else polys.push(...boxFaces(c.p, [c.r,c.r,c.r], null, '#556077'));
+    }
+    for (const p of D.props){
+      if (p.k === 'trigger' && !showTriggers) continue;
+      if (p.k === 'gate' && !showGates) continue;
+      const a = p.yaw * Math.PI/180, s = Math.sin(a/2), cc = Math.cos(a/2);
+      const q = [0,s,0,cc];
+      const colour = p.k === 'gate' ? '#4dd0c7' : p.k === 'trigger' ? '#3a4a5c' : '#e3b341';
+      if (p.sh && p.sh.length){
+        /* Real prefab colliders, in the item's own frame: an instance is only ever
+           the Track XML's position and yaw applied to that shape. */
+        for (const c of p.sh){
+          const l = c.p ? qrot(q, c.p) : [0,0,0];
+          const w = [p.p[0]+l[0], p.p[1]+l[1], p.p[2]+l[2]];
+          if (c.t === 'mesh'){
+            /* Real triangles. A ramp's hull is two of them; its bounding box would
+               be a slab with two vertical walls the game does not have. */
+            for (const f of c.f){
+              polys.push({pts: f.map(i => {
+                const lv = qrot(q, c.v[i]);
+                return [p.p[0]+lv[0], p.p[1]+lv[1], p.p[2]+lv[2]];
+              }), colour: colour, twoSided: true});
+            }
+            continue;
+          }
+          if (c.t === 'box')      polys.push(...boxFaces(w, c.s, qmul(q, c.q), colour));
+          else if (c.t === 'sph') polys.push(...boxFaces(w, [c.r,c.r,c.r], q, colour));
+          else { const h = [c.r,c.r,c.r]; h[c.a] = Math.max(c.h/2, c.r);
+                 polys.push(...boxFaces(w, h, qmul(q, c.q), colour)); }
+        }
+      } else {
+        /* Shape unknown - a mesh-only prefab. Drawn dimmer: a marker saying
+           something is here, not a claim about what it looks like. */
+        polys.push(...boxFaces(p.p, D.propSize, q, p.k === 'prop' ? '#8a6d2f' : colour));
+      }
+    }
+
+    const drawable = [];
+    for (const poly of polys){
+      const sp = poly.pts.map(p => project(p, B, W, H, focal));
+      if (sp.some(p => !p)) continue;
+      const ax = sp[1][0]-sp[0][0], ay = sp[1][1]-sp[0][1];
+      const bx = sp[2][0]-sp[0][0], by = sp[2][1]-sp[0][1];
+      const facing = ax*by - ay*bx;
+      if (facing <= 0 && !poly.twoSided) continue;           // back face
+      if (facing === 0) continue;                            // edge-on, no area
+      const n = normal(poly.pts);
+      const lit = 0.45 + 0.55*Math.abs(n[0]*LIGHT[0]+n[1]*LIGHT[1]+n[2]*LIGHT[2]);
+      drawable.push({sp: sp, z: sp.reduce((a,p)=>a+p[2],0)/sp.length,
+                     fill: shade(poly.colour, lit)});
+    }
+    drawable.sort((a,b)=>b.z-a.z);
+    cx.lineWidth = devicePixelRatio;
+    for (const d of drawable){
+      cx.beginPath(); cx.moveTo(d.sp[0][0], d.sp[0][1]);
+      for (let i=1;i<d.sp.length;i++) cx.lineTo(d.sp[i][0], d.sp[i][1]);
+      cx.closePath(); cx.fillStyle = d.fill; cx.fill();
+      cx.strokeStyle = 'rgba(0,0,0,.45)'; cx.stroke();
+    }
+
+    // flight path, coloured by speed
+    cx.lineWidth = 3*devicePixelRatio; cx.lineCap = 'round';
+    for (let i=1;i<D.path.length;i++){
+      const a = project(D.path[i-1].p, B, W, H, focal), b = project(D.path[i].p, B, W, H, focal);
+      if (!a || !b) continue;
+      cx.beginPath(); cx.moveTo(a[0],a[1]); cx.lineTo(b[0],b[1]);
+      cx.strokeStyle = ramp(D.path[i].v); cx.globalAlpha = i <= frame ? 1 : 0.28; cx.stroke();
+    }
+    cx.globalAlpha = 1;
+
+    for (const i of D.impacts){
+      const p = project(D.path[i].p, B, W, H, focal);
+      if (!p) continue;
+      /* A filled red disc with a white X - the same mark the lap maps and the
+         playbacks use for an impact, so one shape means "crash" everywhere in
+         the report rather than three. */
+      const rr = Math.max(6, 260/p[2]) * devicePixelRatio;
+      cx.beginPath(); cx.arc(p[0],p[1],rr,0,7); cx.fillStyle='#f0524d'; cx.fill();
+      const a = rr*0.45;
+      cx.beginPath();
+      cx.moveTo(p[0]-a,p[1]-a); cx.lineTo(p[0]+a,p[1]+a);
+      cx.moveTo(p[0]+a,p[1]-a); cx.lineTo(p[0]-a,p[1]+a);
+      cx.strokeStyle='#ffffff'; cx.lineWidth=Math.max(1.5, rr*0.24);
+      cx.lineCap='round'; cx.stroke(); cx.lineCap='butt';
+    }
+
+    // the quad: a small body at its true attitude, plus a nose arrow
+    const s = D.path[frame];
+    for (const poly of boxFaces(s.p, [0.16,0.06,0.16], s.q, '#e6edf3')){
+      const sp = poly.pts.map(p=>project(p,B,W,H,focal));
+      if (sp.some(p=>!p)) continue;
+      cx.beginPath(); cx.moveTo(sp[0][0],sp[0][1]);
+      for (let i=1;i<sp.length;i++) cx.lineTo(sp[i][0],sp[i][1]);
+      cx.closePath(); cx.fillStyle='#e6edf3'; cx.fill();
+    }
+    const nose = qrot(s.q, [0,0,1.4]);
+    const a = project(s.p, B, W, H, focal);
+    const b = project([s.p[0]+nose[0], s.p[1]+nose[1], s.p[2]+nose[2]], B, W, H, focal);
+    if (a && b){
+      cx.beginPath(); cx.moveTo(a[0],a[1]); cx.lineTo(b[0],b[1]);
+      cx.strokeStyle='#4dd0c7'; cx.lineWidth=3*devicePixelRatio; cx.stroke();
+    }
+    if (readout) readout.textContent = s.v.toFixed(0)+' km/h   height '+s.p[1].toFixed(2)+' m';
+    if (timeOut) timeOut.textContent = 't = '+s.t.toFixed(1)+' s';
+  }
+
+  function seek(f){
+    frame = Math.max(0, Math.min(D.path.length-1, f|0));
+    if (scrub) scrub.value = frame;
+    draw();
+  }
+  function setPlaying(on){
+    playing = !!on;
+    if (playBtn) playBtn.textContent = playing ? 'Pause' : 'Play';
+    if (timer){ clearTimeout(timer); timer = null; }
+    if (playing) tick();
+  }
+  function tick(){
+    if (!playing || !alive) return;
+    /* A recording sitting on its last frame and asked to play again starts
+       over rather than doing nothing. */
+    frame = (frame + 1) % D.path.length;
+    if (scrub) scrub.value = frame;
+    draw();
+    timer = setTimeout(()=>requestAnimationFrame(tick), 90);
+  }
+
+  if (scrub){
+    scrub.max = D.path.length - 1; scrub.value = frame;
+    scrub.addEventListener('input', ()=>{ setPlaying(false); seek(+scrub.value); });
+  }
+  if (playBtn) playBtn.addEventListener('click', ()=>setPlaying(!playing));
+  if (gatesBtn){
+    gatesBtn.textContent = showGates ? 'Hide route' : 'Show route';
+    gatesBtn.addEventListener('click', ()=>{
+      showGates = !showGates;
+      gatesBtn.textContent = showGates ? 'Hide route' : 'Show route'; draw();
+    });
+  }
+  if (trigBtn){
+    trigBtn.textContent = showTriggers ? 'Hide triggers' : 'Show triggers';
+    trigBtn.addEventListener('click', ()=>{
+      showTriggers = !showTriggers;
+      trigBtn.textContent = showTriggers ? 'Hide triggers' : 'Show triggers'; draw();
+    });
+  }
+  if (playBtn) playBtn.textContent = 'Play';
+
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY];
+    cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointerup', () => { drag = null; cv.classList.remove('drag'); });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    yaw += (e.clientX - drag[0]) * 0.008;
+    pitch = Math.max(-1.4, Math.min(1.4, pitch + (e.clientY - drag[1]) * 0.006));
+    drag = [e.clientX, e.clientY]; draw();
+  });
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    dist = Math.max(2, Math.min(400, dist * (e.deltaY > 0 ? 1.12 : 0.89))); draw();
+  }, {passive:false});
+
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(()=>resize()) : null;
+  if (ro) ro.observe(cv);
+  addEventListener('resize', resize);
+  resize();
+
+  return {
+    draw: draw, resize: resize, seek: seek,
+    play: ()=>setPlaying(true), pause: ()=>setPlaying(false),
+    /* Closing a modal must stop the loop it started. Without this, every
+       recording ever opened keeps drawing into a detached canvas. */
+    destroy: function(){
+      alive = false; playing = false;
+      if (timer){ clearTimeout(timer); timer = null; }
+      if (ro) ro.disconnect();
+      removeEventListener('resize', resize);
+    }
+  };
+}
+
+fpvViewer(document.getElementById('wrap'), {"colliders":[],"props":[],"propSize":[0.6,1.0,0.6],"path":[{"t":0.0,"p":[0.0,2.0,0.0],"q":[0.0087,0.03,0.2797,0.9596],"v":18.0},{"t":0.1,"p":[0.031,2.0,0.499],"q":[0.0175,0.06,0.2793,0.9582],"v":18.0},{"t":0.2,"p":[0.124,2.0,0.99],"q":[0.0349,0.1197,0.2777,0.9526],"v":18.0},{"t":0.3,"p":[0.278,2.0,1.465],"q":[0.0522,0.179,0.2749,0.9432],"v":18.0},{"t":0.4,"p":[0.49,2.0,1.918],"q":[0.0692,0.2375,0.2711,0.9302],"v":18.0},{"t":0.5,"p":[0.756,2.0,2.34],"q":[0.086,0.2952,0.2663,0.9135],"v":18.0},{"t":0.6,"p":[1.073,2.0,2.727],"q":[0.1025,0.3516,0.2604,0.8933],"v":18.0},{"t":0.7,"p":[1.436,2.0,3.07],"q":[0.1186,0.4067,0.2535,0.8696],"v":18.0},{"t":0.8,"p":[1.839,2.0,3.366],"q":[0.1342,0.4603,0.2456,0.8425],"v":18.0},{"t":0.9,"p":[2.275,2.0,3.609],"q":[0.1492,0.512,0.2367,0.8121],"v":18.0},{"t":1.0,"p":[2.739,2.0,3.796],"q":[0.1637,0.5617,0.2269,0.7786],"v":18.0},{"t":1.1,"p":[3.222,2.0,3.924],"q":[0.1776,0.6093,0.2163,0.742],"v":18.0},{"t":1.2,"p":[3.717,2.0,3.99],"q":[0.1908,0.6544,0.2048,0.7025],"v":18.0},{"t":1.3,"p":[4.217,2.0,3.994],"q":[0.2032,0.697,0.1924,0.6602],"v":18.0},{"t":1.4,"p":[4.713,2.0,3.936],"q":[0.2148,0.7369,0.1794,0.6154],"v":18.0},{"t":1.5,"p":[5.198,2.0,3.816],"q":[0.2256,0.7739,0.1656,0.5682],"v":18.0},{"t":1.6,"p":[5.665,2.0,3.637],"q":[0.2355,0.8079,0.1512,0.5187],"v":18.0},{"t":1.7,"p":[6.105,2.0,3.401],"q":[0.2445,0.8387,0.1362,0.4672],"v":18.0},{"t":1.8,"p":[6.513,2.0,3.112],"q":[0.2525,0.8662,0.1207,0.4139],"v":18.0},{"t":1.9,"p":[6.881,2.0,2.775],"q":[0.2595,0.8904,0.1047,0.359],"v":18.0},{"t":2.0,"p":[7.205,2.0,2.394],"q":[0.2656,0.9111,0.0882,0.3027],"v":18.0},{"t":2.1,"p":[7.478,2.0,1.976],"q":[0.2706,0.9282,0.0715,0.2452],"v":18.0},{"t":2.2,"p":[7.697,2.0,1.527],"q":[0.2745,0.9417,0.0544,0.1868],"v":18.0},{"t":2.3,"p":[7.859,2.0,1.054],"q":[0.2774,0.9515,0.0372,0.1276],"v":18.0},{"t":2.4,"p":[7.96,2.0,0.564],"q":[0.2791,0.9576,0.0198,0.0679],"v":18.0},{"t":2.5,"p":[7.999,2.0,0.066],"q":[0.2798,0.96,0.0023,0.008],"v":18.0},{"t":2.6,"p":[7.977,2.0,-0.433],"q":[0.2794,0.9586,-0.0152,-0.052],"v":18.0},{"t":2.7,"p":[7.892,2.0,-0.925],"q":[0.2779,0.9535,-0.0326,-0.1118],"v":18.0},{"t":2.8,"p":[7.746,2.0,-1.403],"q":[0.2754,0.9447,-0.0499,-0.1711],"v":18.0},{"t":2.9,"p":[7.542,2.0,-1.859],"q":[0.2717,0.9321,-0.067,-0.2298],"v":18.0},{"t":3.0,"p":[7.282,2.0,-2.286],"q":[0.267,0.916,-0.0838,-0.2876],"v":18.0},{"t":3.1,"p":[6.972,2.0,-2.678],"q":[0.2612,0.8962,-0.1003,-0.3442],"v":18.0},{"t":3.2,"p":[6.615,2.0,-3.027],"q":[0.2545,0.873,-0.1165,-0.3995],"v":18.0},{"t":3.3,"p":[6.217,2.0,-3.33],"q":[0.2467,0.8463,-0.1321,-0.4533],"v":18.0},{"t":3.4,"p":[5.784,2.0,-3.58],"q":[-0.238,-0.8163,0.1473,0.5052],"v":18.0},{"t":3.5,"p":[5.324,2.0,-3.774],"q":[-0.2283,-0.7832,0.1618,0.5552],"v":18.0},{"t":3.6,"p":[4.843,2.0,-3.91],"q":[-0.2177,-0.747,0.1758,0.6031],"v":18.0},{"t":3.7,"p":[4.349,2.0,-3.985],"q":[-0.2063,-0.7079,0.189,0.6486],"v":18.0},{"t":3.8,"p":[3.85,2.0,-3.997],"q":[-0.1941,-0.666,0.2016,0.6915],"v":18.0},{"t":3.9,"p":[3.352,2.0,-3.947],"q":[-0.1812,-0.6215,0.2133,0.7317],"v":18.0},{"t":4.0,"p":[2.865,2.0,-3.836],"q":[-0.1675,-0.5746,0.2242,0.7691],"v":18.0},{"t":4.1,"p":[2.396,2.0,-3.664],"q":[-0.1531,-0.5254,0.2342,0.8035],"v":18.0},{"t":4.2,"p":[1.952,2.0,-3.436],"q":[-0.1382,-0.4742,0.2433,0.8348],"v":18.0},{"t":4.3,"p":[1.539,2.0,-3.154],"q":[-0.1228,-0.4211,0.2515,0.8628],"v":18.0},{"t":4.4,"p":[1.165,2.0,-2.822],"q":[-0.1068,-0.3664,0.2587,0.8874],"v":18.0},{"t":4.5,"p":[0.836,2.0,-2.447],"q":[-0.0904,-0.3103,0.2648,0.9085],"v":18.0},{"t":4.6,"p":[0.555,2.0,-2.033],"q":[-0.0737,-0.2529,0.27,0.9261],"v":18.0},{"t":4.7,"p":[0.329,2.0,-1.588],"q":[-0.0567,-0.1946,0.274,0.9401],"v":18.0},{"t":4.8,"p":[0.159,2.0,-1.118],"q":[-0.0395,-0.1355,0.277,0.9504],"v":18.0},{"t":4.9,"p":[0.05,2.0,-0.63],"q":[-0.0221,-0.0759,0.279,0.957],"v":18.0},{"t":5.0,"p":[0.002,2.0,-0.133],"q":[-0.0094,-0.0321,0.2797,0.9595],"v":18.0},{"t":5.1,"p":[-0.017,2.0,0.367],"q":[0.0135,-0.0462,-0.2795,0.9589],"v":18.0},{"t":5.2,"p":[-0.094,2.0,0.86],"q":[0.0303,-0.1039,-0.2782,0.9544],"v":18.0},{"t":5.3,"p":[-0.231,2.0,1.341],"q":[0.0476,-0.1633,-0.2758,0.9461],"v":18.0},{"t":5.4,"p":[-0.428,2.0,1.8],"q":[0.0647,-0.2221,-0.2723,0.934],"v":18.0},{"t":5.5,"p":[-0.68,2.0,2.231],"q":[0.0816,-0.28,-0.2677,0.9183],"v":18.0},{"t":5.6,"p":[-0.984,2.0,2.628],"q":[0.0982,-0.3368,-0.2621,0.899],"v":18.0},{"t":5.7,"p":[-1.336,2.0,2.983],"q":[0.1143,-0.3923,-0.2554,0.8763],"v":18.0},{"t":5.8,"p":[-1.728,2.0,3.292],"q":[0.1301,-0.4462,-0.2478,0.85],"v":18.0},{"t":5.9,"p":[-2.156,2.0,3.55],"q":[0.1453,-0.4985,-0.2392,0.8205],"v":18.0},{"t":6.0,"p":[-2.613,2.0,3.752],"q":[0.1599,-0.5487,-0.2296,0.7878],"v":18.0},{"t":6.1,"p":[-3.092,2.0,3.896],"q":[0.174,-0.5969,-0.2192,0.752],"v":18.0},{"t":6.2,"p":[-3.585,2.0,3.978],"q":[0.1873,-0.6427,-0.2079,0.7132],"v":18.0},{"t":6.3,"p":[-4.084,2.0,3.999],"q":[0.1999,-0.686,-0.1958,0.6717],"v":18.0},{"t":6.4,"p":[-4.582,2.0,3.957],"q":[0.2118,-0.7266,-0.1829,0.6275],"v":18.0},{"t":6.5,"p":[-5.071,2.0,3.854],"q":[0.2228,-0.7643,-0.1693,0.5809],"v":18.0},{"t":6.6,"p":[-5.543,2.0,3.69],"q":[0.2329,-0.7991,-0.1551,0.532],"v":18.0},{"t":6.7,"p":[-5.991,2.0,3.469],"q":[-0.2422,0.8308,0.1402,-0.4811],"v":18.0},{"t":6.8,"p":[-6.408,2.0,3.194],"q":[-0.2505,0.8592,0.1248,-0.4283],"v":18.0},{"t":6.9,"p":[-6.787,2.0,2.869],"q":[-0.2578,0.8843,0.1089,-0.3738],"v":18.0},{"t":7.0,"p":[-7.123,2.0,2.499],"q":[-0.2641,0.9059,0.0926,-0.3178],"v":18.0},{"t":7.1,"p":[-7.411,2.0,2.09],"q":[-0.2693,0.924,0.076,-0.2606],"v":18.0},{"t":7.2,"p":[-7.645,2.0,1.648],"q":[-0.2736,0.9385,0.059,-0.2024],"v":18.0},{"t":7.3,"p":[-7.822,2.0,1.181],"q":[-0.2767,0.9493,0.0418,-0.1434],"v":18.0},{"t":7.4,"p":[-7.939,2.0,0.696],"q":[-0.2788,0.9564,0.0244,-0.0838],"v":18.0},{"t":7.5,"p":[-7.995,2.0,0.199],"q":[-0.2798,0.9597,0.007,-0.0239],"v":18.0},{"t":7.6,"p":[-7.989,2.0,-0.301],"q":[-0.2796,0.9594,-0.0105,0.0361],"v":18.0},{"t":7.7,"p":[-7.92,2.0,-0.796],"q":[-0.2784,0.9552,-0.028,0.096],"v":18.0},{"t":7.8,"p":[-7.79,2.0,-1.278],"q":[-0.2761,0.9474,-0.0453,0.1554],"v":18.0},{"t":7.9,"p":[-7.601,2.0,-1.741],"q":[-0.2728,0.9358,-0.0625,0.2143],"v":18.0},{"t":8.0,"p":[-7.356,2.0,-2.176],"q":[-0.2683,0.9206,-0.0794,0.2723],"v":18.0},{"t":8.1,"p":[-7.059,2.0,-2.578],"q":[-0.2629,0.9018,-0.096,0.3293],"v":18.0},{"t":8.2,"p":[-6.714,2.0,-2.939],"q":[-0.2564,0.8795,-0.1122,0.385],"v":18.0},{"t":8.3,"p":[-6.326,2.0,-3.254],"q":[-0.2488,0.8537,-0.128,0.4392],"v":18.0},{"t":8.4,"p":[-5.902,2.0,-3.519],"q":[-0.2404,0.8246,-0.1433,0.4916],"v":18.0},{"t":8.5,"p":[-5.449,2.0,-3.728],"q":[-0.2309,0.7923,-0.158,0.5422],"v":18.0},{"t":8.6,"p":[-4.972,2.0,-3.88],"q":[-0.2206,0.7569,-0.1722,0.5906],"v":18.0},{"t":8.7,"p":[-4.481,2.0,-3.971],"q":[-0.2094,0.7185,-0.1856,0.6367],"v":18.0},{"t":8.8,"p":[-3.982,2.0,-4.0],"q":[-0.1974,0.6774,-0.1983,0.6804],"v":18.0},{"t":8.9,"p":[-3.484,2.0,-3.967],"q":[-0.1847,0.6335,-0.2103,0.7213],"v":18.0},{"t":9.0,"p":[-2.993,2.0,-3.871],"q":[-0.1712,0.5872,-0.2214,0.7595],"v":18.0},{"t":9.1,"p":[-2.518,2.0,-3.716],"q":[-0.157,0.5387,-0.2316,0.7947],"v":18.0},{"t":9.2,"p":[-2.067,2.0,-3.502],"q":[-0.1422,0.488,-0.241,0.8268],"v":18.0},{"t":9.3,"p":[-1.645,2.0,-3.233],"q":[-0.1269,0.4354,-0.2494,0.8556],"v":18.0},{"t":9.4,"p":[-1.261,2.0,-2.915],"q":[-0.1111,0.3811,-0.2568,0.8812],"v":18.0},{"t":9.5,"p":[-0.919,2.0,-2.55],"q":[-0.0948,0.3253,-0.2633,0.9033],"v":18.0},{"t":9.6,"p":[-0.625,2.0,-2.146],"q":[-0.0782,0.2683,-0.2687,0.9218],"v":18.0},{"t":9.7,"p":[-0.383,2.0,-1.709],"q":[-0.0613,0.2102,-0.2731,0.9368],"v":18.0},{"t":9.8,"p":[-0.199,2.0,-1.244],"q":[-0.0441,0.1512,-0.2763,0.9481],"v":18.0},{"t":9.9,"p":[-0.073,2.0,-0.761],"q":[-0.0267,0.0917,-0.2786,0.9557],"v":18.0},{"t":10.0,"p":[-0.009,2.0,-0.265],"q":[-0.018,0.0618,-0.2793,0.9581],"v":18.0}],"impacts":[],"target":[0.0,2.0,-0.13],"dist0":15.0,"vref":30.0,"startFrame":0,"showGates":false,"showTriggers":false,"note":"Two opposed circles joined at the crossing, flown nose-forward. The roll has to reverse through zero at the join without the height moving. This is the drill that finds a lazy throttle hand."});
+</script>

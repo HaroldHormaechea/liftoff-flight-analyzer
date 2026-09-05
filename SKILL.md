@@ -318,6 +318,37 @@ Coaching model that the measurements support:
   change of technique fixes it; slow exploratory laps do.
 - Late-session runs carry almost no diagnostic value. Do not debug fatigue.
 
+### Showing a manoeuvre the pilot has not flown
+
+When the debrief names a manoeuvre they do not already own — a split-S as the way
+out of a corner too tight to bank in, a power loop as what the tree was for, a
+backflip as the thing the drill is building toward — **show it instead of
+describing the shape in prose.** `manoeuvres/` holds eight of them, pre-rendered
+with this toolkit's own figure code, so the picture arrives in the same colours
+and on the same speed ramp as every other figure in the report.
+
+```bash
+python manoeuvres/build_manoeuvres.py --install <report-dir> backflip split-s
+```
+
+That copies the figures into the report's own `assets/`, which is what keeps the
+report folder portable — reports live in the host project when this toolkit is
+mounted as a skill, so a relative href back to `manoeuvres/` is different for
+every installation. Then, inside the Debrief:
+
+```markdown
+![Backflip](assets/backflip.svg)
+```
+
+The bar across the path is the airframe and the spike is the top of the quad,
+both red once inverted, which is what makes "which way is up" answerable at a
+glance. Loops are drawn side-on; a loop seen from above is a straight line.
+
+Reach for one when the manoeuvre is being TAUGHT. A figure beside a fault the
+pilot has already fixed reads as padding, and the report is short on purpose.
+`docs/manoeuvres.md` covers the interactive version, the trap about which element
+to hand the viewer, and how to add a ninth.
+
 Tone: lead with the number and the cause. Name **one** thing to fix and give
 **one** drill. Do not stack three — a pilot who is given three fixes does none of
 them, and the next flight's data cannot attribute a change to any of them.

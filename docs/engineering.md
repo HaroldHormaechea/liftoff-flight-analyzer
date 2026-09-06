@@ -252,15 +252,26 @@ the replay records**, so a gate and a flight path compare with no
 transformation. For an item at yaw `r` the normal is `(sin r, 0, cos r)` and the
 width axis is `(cos r, 0, -sin r)`.
 
-Two things that will bite a naive reader:
+Three things that will bite a naive reader:
+
+* **Shipped races BRANCH, and the route walk must end on the Finish passage.**
+  `nextPassageIDs` is a list, and twelve of the 92 official races have nodes with
+  two successors — MarinaBay / "04 - No ticket needed" has six. A walk that stops
+  when it sees a branch returns a short route and no error: that race resolved to
+  32 of its 80 passages, and `--gates` then labelled whatever it stopped on as
+  the finish. Terminate on `passageType == "Finish"`, take the first arm and
+  report the branch, and never infer the finish from list position — on an
+  out-and-back the Start and Finish sit on the *same* checkpoint. `walk_route`
+  returns `finished`, `finish_id` and `branches` so a caller can see all of this;
+  `route` is the thin wrapper for callers that only want the order.
 
 * **Which items are gates is the race's decision, not the track's.** A
   checkpoint is any blueprint the route names by `instanceID`, of any subtype.
   On Bardwells Yard every one is a plain inflatable arch; on HangarC03 the route
   mixes truss gates, a fixed 5×5 box and three resizable checkpoints. Filtering a
   track's blueprints by `xsi:type` to enumerate "the gates" finds three of the
-  ten. Resolve the route. It is a lap, so it ends back on the checkpoint it
-  started from.
+  ten. Resolve the route. It is usually a lap, ending back on the checkpoint it
+  started from — but read `finish_id` rather than assuming it.
 * **A checkpoint is a scoring volume, not a hole.** The two are independent and
   the environment can obstruct any part of one. On HangarC03 the gate 31
   checkpoint centre sits 0.51 m inside a closed container door: aim at the middle

@@ -54,10 +54,13 @@ TrackBlueprint is polymorphic via xsi:type, and only the resizable subtypes
 carry `scale` - which, on unit-sized prefabs, IS the aperture in metres. Parsing
 by tag name alone silently drops it.
 
-Race XML holds the route as a linked list of passages: start at
-passageType = Start and follow nextPassageIDs to Finish. Every shipped race has
-one successor per node, but the field is a list with capacity for 4, so
-community tracks may branch.
+Race XML holds the route as a graph of passages: start at passageType = Start
+and follow nextPassageIDs to the passage typed Finish. SHIPPED RACES BRANCH -
+MarinaBay / "04 - No ticket needed" has six passages with two successors each -
+so the walk must not assume a linked list, and it must terminate on the Finish
+TYPE rather than on running out of successors. The Finish is also not always a
+distinct checkpoint: on that race Start and Finish are both checkpoint 2,
+because the course runs out and back.
 
 WHICH ITEMS ARE GATES IS THE RACE'S DECISION, NOT THE TRACK'S. A checkpoint is
 any blueprint the route names by instanceID, of any subtype: on Bardwells Yard
@@ -293,12 +296,28 @@ def gates(track_root, order):
     return [table.get(cid) for cid in order]
 
 
-def route(race_root):
-    """Checkpoint IDs in the order they must be flown, Start to Finish.
+def walk_route(race_root):
+    """Resolve a race route to (order, info).
 
-    Follows nextPassageIDs. Every shipped race is a linked list, but the field is
-    a list with room for four, so a branching community track stops the walk
-    instead of having a successor picked for it arbitrarily."""
+    `order` is the checkpoint IDs in the order they must be flown. `info` says
+    how the walk ended and what it had to guess:
+
+      finished   True if it stopped on the passage typed Finish. False means the
+                 route is INCOMPLETE and every distance derived from it is wrong.
+      finish_id  the checkpoint the Finish passage sits on, or None. It is not
+                 always the last distinct checkpoint and it is not always
+                 different from the start - an out-and-back finishes where it
+                 began.
+      branches   [(checkpoint_id, [successor checkpoint ids])] for every node
+                 where a choice was made. The first successor is taken, because
+                 a route that continues is worth more than one that stops, but
+                 the caller is told so it can resolve the arm against a flight.
+
+    A previous version assumed one successor per node and returned as soon as it
+    saw two. That silently truncated MarinaBay / "04 - No ticket needed" to 32 of
+    its 80 passages and reported the truncation as a complete point-to-point
+    course, which put every leg split on that race against geometry the pilot
+    never flew."""
     passages, start = {}, None
     listed = race_root.find("checkPointPassages")
     for passage in listed if listed is not None else []:
@@ -306,14 +325,32 @@ def route(race_root):
         passages[uid] = passage
         if _text(passage, "passageType") == "Start":
             start = uid
-    order, seen, uid = [], set(), start
+    finish_id = next((int(_text(p, "checkPointID", "0")) for p in passages.values()
+                      if _text(p, "passageType") == "Finish"), None)
+
+    order, branches, seen, uid, finished = [], [], set(), start, False
     while uid and uid in passages and uid not in seen:
         seen.add(uid)
         passage = passages[uid]
         order.append(int(_text(passage, "checkPointID", "0")))
+        if _text(passage, "passageType") == "Finish":
+            finished = True
+            break
         following = [s.text for s in passage.findall("./nextPassageIDs/string") if s.text]
-        uid = following[0] if len(following) == 1 else None
-    return order
+        if len(following) > 1:
+            branches.append((order[-1],
+                             [int(_text(passages[n], "checkPointID", "0"))
+                              for n in following if n in passages]))
+        uid = following[0] if following else None
+    return order, {"finished": finished, "finish_id": finish_id, "branches": branches}
+
+
+def route(race_root):
+    """Checkpoint IDs in the order they must be flown, Start to Finish.
+
+    Thin wrapper on walk_route for callers that only want the order. Prefer
+    walk_route where an incomplete walk would matter."""
+    return walk_route(race_root)[0]
 
 
 def build_index(out_dir, source):
@@ -336,7 +373,7 @@ def build_index(out_dir, source):
                 "blueprints": len(blueprints(root)),
             }
         elif root.tag == "Race":
-            order = route(root)
+            order, info = walk_route(root)
             races[guid] = {
                 "file": path.name,
                 "name": _text(root, "name"),
@@ -346,6 +383,11 @@ def build_index(out_dir, source):
                 # from, so the number of gates flown is one less than its length.
                 "checkpoints": max(len(order) - 1, 0),
                 "route": order,
+                # Carried so a caller can label the finish by TYPE rather than by
+                # list position, and can see a route the walk could not complete.
+                "finish_id": info["finish_id"],
+                "route_complete": info["finished"],
+                "branches": info["branches"],
             }
     for guid, race in races.items():
         track = tracks.get(race["track"])
@@ -480,6 +522,31 @@ def for_replay(out_dir, replay):
 
 # ----------------------------------------------------------------------- main
 
+def route_warnings(race):
+    """Human-readable notes about a resolved route, empty when there is nothing wrong.
+
+    An index built before route completeness was recorded has neither key, so a
+    missing `route_complete` is treated as fine rather than as a failure."""
+    notes = []
+    if race.get("route_complete") is False:
+        notes.append("WARNING: the route walk did not reach the Finish passage - "
+                     "this route is INCOMPLETE and any distance from it is wrong. "
+                     "Rebuild the track data; if it persists the race branches in a "
+                     "way the walk cannot follow.")
+    branches = race.get("branches") or []
+    if branches:
+        notes.append("note: %d branch%s in this route; the first arm was taken (%s). "
+                     "Resolve the arm against the flight before trusting a leg split."
+                     % (len(branches), "" if len(branches) == 1 else "es",
+                        ", ".join("cp%d -> %s" % (cid, "/".join(str(n) for n in nxt))
+                                  for cid, nxt in branches[:4])))
+    finish_id = race.get("finish_id")
+    if finish_id is not None and race.get("route") and finish_id != race["route"][-1]:
+        notes.append("note: the Finish passage is on checkpoint %d, which is not where "
+                     "this route ends (%d)." % (finish_id, race["route"][-1]))
+    return notes
+
+
 def cmd_for_replay(args, index_dir):
     track, race, track_id, race_id = for_replay(index_dir, args.for_replay)
     if args.json:
@@ -500,6 +567,8 @@ def cmd_for_replay(args, index_dir):
         return
     print("  %d checkpoints, %d laps" % (race["checkpoints"], race["laps"]))
     print("  route %s" % " -> ".join(str(i) for i in race["route"]))
+    for line in route_warnings(race):
+        print("  %s" % line)
     print("  geometry: %s"
           % toolkit.command("tracks", "--gates", repr(track["name"]),
                             "-o", index_dir))
@@ -531,6 +600,8 @@ def cmd_gates(args, index_dir):
         return
     print("%s / %s  -  %d checkpoints, %d laps"
           % (meta["environment"], meta["name"], race["checkpoints"], race["laps"]))
+    for line in route_warnings(race):
+        print(line)
     print("%-6s %-4s %-26s %-27s %-7s %s"
           % ("#", "id", "item", "position x/y/z", "yaw", "aperture"))
     for i, (cid, gate) in enumerate(zip(race["route"], found)):
@@ -538,7 +609,18 @@ def cmd_gates(args, index_dir):
             print("%-6d %-4d not defined by the track" % (i, cid))
             continue
         aperture = ("%5.2f x %5.2f m" % tuple(gate["aperture"])) if gate["aperture"] else "fixed"
-        label = "finish" if i == len(found) - 1 else ("start" if i == 0 else str(i))
+        # The finish is the passage TYPED Finish, never "the last one in the
+        # list" - a truncated walk would otherwise crown whatever it stopped on,
+        # and an out-and-back finishes on the checkpoint it started from.
+        last = i == len(found) - 1
+        if i == 0:
+            label = "start"
+        elif last and race.get("route_complete", True):
+            label = "finish"
+        elif last:
+            label = "STOPPED"
+        else:
+            label = str(i)
         print("%-6s %-4d %-26s (%7.2f,%6.2f,%7.2f) %6.1f  %s"
               % (label, gate["id"], (gate["item"] or "?")[:26],
                  gate["pos"][0], gate["pos"][1], gate["pos"][2], gate["yaw"], aperture))

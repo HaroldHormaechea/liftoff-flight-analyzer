@@ -72,6 +72,7 @@ from pathlib import Path
 from fpv_review.common import analysis
 from fpv_review.common import geometry
 from fpv_review.common import incident_view
+from fpv_review.common import manoeuvres
 
 # ---------------------------------------------------------------------------
 # palette
@@ -963,6 +964,7 @@ def write(path, text):
 # ---------------------------------------------------------------------------
 
 CRASH_PAD = 3.0          # seconds either side of an impact
+MOVE_PAD = 1.5           # seconds either side of a manoeuvre - entry and exit are the coached part
 NEAR_HIT_M = 6.0         # a prop further than this was not what the quad hit
 
 
@@ -1203,9 +1205,13 @@ def stall_id(k, i):
     return "stall-%d-%d" % (k + 1, i)
 
 
+def move_id(m):
+    return "move-%d" % m["n"]
+
+
 def build_recordings(series, hits, crashes, report, names, scene, note,
                      props_for, prop_size, dt, radius, stall_pad,
-                     crash_pad=CRASH_PAD):
+                     crash_pad=CRASH_PAD, moves=()):
     """A payload per crash and per stall, all sharing one pool of geometry.
 
     `props_for` is a callable the caller supplies: hand it the points of one
@@ -1252,10 +1258,23 @@ def build_recordings(series, hits, crashes, report, names, scene, note,
                 "%s, stall %d at %.1f s - %s" % (names[k], i, st["t"], st["verdict"]),
                 max(0, s0 - pad), min(len(series), s1 + pad + 1), (s0 + s1) // 2)
 
+    # A manoeuvre gets the same 3D recording a crash does, and for the same
+    # reason: the numbers say a loop happened, the recording says what it looked
+    # like and what it was flown around. A little more context either side than
+    # a stall, because the entry and the exit are the coached part.
+    mpad = max(1, int(round(MOVE_PAD / dt)))
+    for m in moves:
+        a, b = m["index"]
+        add(move_id(m),
+            "%s, %s at %.1f s%s"
+            % (m["segment"], m["title"].lower(), m["t"],
+               "" if m["complete"] else " (did not come round)"),
+            max(0, a - mpad), min(len(series), b + mpad), m["focus"])
+
     return {"geo": colliders.items, "props": props.items, "items": items}
 
 
-def findings(meta, report, names, pb, crashes=()):
+def findings(meta, report, names, pb, crashes=(), moves=()):
     """Mechanical observations: true by arithmetic, no judgement.
 
     Kept separate from the Debrief on purpose. A generated sentence can say a
@@ -1297,6 +1316,17 @@ def findings(meta, report, names, pb, crashes=()):
         if off:
             out.append("**%d of them started off the racing line.** That is a line error, "
                        "not a stick error, and no change of technique fixes it." % len(off))
+    if moves:
+        kinds = {}
+        for m in moves:
+            kinds[m["kind"]] = kinds.get(m["kind"], 0) + 1
+        short = [m for m in moves if not m["complete"]]
+        out.append("**%d acrobatic manoeuvre%s**: %s.%s"
+                   % (len(moves), "" if len(moves) == 1 else "s",
+                      ", ".join("%d %s" % (v, manoeuvres.name(k, v))
+                                for k, v in sorted(kinds.items(),
+                                                   key=lambda kv: -kv[1])),
+                      "  **%d did not come round.**" % len(short) if short else ""))
     for k, e in enumerate(report):
         y = e["yaw_only"]
         if y["yaw_only_pct"] is not None and y["yaw_only_pct"] >= 30:
@@ -1408,8 +1438,68 @@ def rec_cell(rec_id, rec_ids):
             if rec_id in rec_ids else "-")
 
 
+def manoeuvre_section(moves, rec_ids):
+    """Acrobatic manoeuvres, one row each, newest kind of section in the report.
+
+    Ordered by time, not by kind, because the interesting thing about eleven
+    backflips is how the eleventh differed from the first - and the throttle
+    columns are what that difference lives in. `1st qtr` is the entry punch and
+    `3rd qtr` is the far side of the top, which are the two numbers that decide
+    whether a loop comes round.
+    """
+    done = sum(1 for m in moves if m["complete"])
+    kinds = {}
+    for m in moves:
+        kinds[m["kind"]] = kinds.get(m["kind"], 0) + 1
+    parts = ["%d %s" % (v, manoeuvres.name(k, v)) for k, v in kinds.items()]
+    summary = (parts[0] if len(parts) == 1
+               else ", ".join(parts[:-1]) + " and " + parts[-1])
+
+    rows = []
+    for m in moves:
+        thr = m.get("throttle") or {}
+        rows.append([
+            m["n"], m["segment"], "%.1f" % m["t"], "**%s**" % m["title"],
+            "%.1f" % m["duration_s"],
+            "yes" if m["complete"] else "**no**",
+            "%.1f -> %.1f" % (m["height_entry_m"], m["height_exit_m"]),
+            "%.1f" % m["height_peak_m"],
+            "%.0f / %.0f / %.0f" % (m["entry_kmh"], m["min_kmh"], m["exit_kmh"]),
+            "%.2f" % thr["first_quarter"] if "first_quarter" in thr else "-",
+            "%.2f" % thr["third_quarter"] if "third_quarter" in thr else "-",
+            "%d%%" % m["inverted_pct"],
+            m["confidence"],
+            rec_cell(move_id(m), rec_ids)])
+
+    body = [md_table(["#", "segment", "t", "manoeuvre", "s", "came round", "height m",
+                      "peak m", "km/h in/min/out", "thr 1st qtr", "thr 3rd qtr",
+                      "inverted", "confidence", "recording"], rows), "",
+            "**Why each one is called what it is.**", ""]
+    body += ["- **%d.** %s - %s" % (m["n"], m["title"], m["note"]) for m in moves]
+    body += ["",
+             "A manoeuvre is named by the axis the airframe turned about, not by how far "
+             "it leaned: `tilt` reaches 180 degrees in a loop and in a roll alike. A full "
+             "turn of pitch with no roll is a backflip; a full turn of roll with no pitch "
+             "is an axial roll; half of each, in that order, is a split-S, and in the "
+             "other order an Immelmann. The orbit, the figure eight and the dive never "
+             "leave upright, so those three are found in the path instead - which is why "
+             "an orbit has to show the nose pinned inward before it is called one, since "
+             "a racing lap also comes round 360 degrees eventually.", "",
+             "`came round: no` is not a failure to report - it is the row worth reading. "
+             "A rotation that stopped short is the same manoeuvre attempted, and the "
+             "throttle columns beside it usually say why.", ""]
+
+    return ["## Acrobatic manoeuvres", "",
+            "**%s.** %s"
+            % (summary,
+               ("It came round." if len(moves) == 1 else "All of them came round.")
+               if done == len(moves)
+               else "%d came round, %d did not." % (done, len(moves) - done)),
+            ""] + body
+
+
 def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrief=None,
-                 crashes=(), rec_ids=(), pits=()):
+                 crashes=(), rec_ids=(), pits=(), moves=()):
     """The reader's order, which is not the analysis order.
 
     The debrief comes first because it is the answer; everything after it is the
@@ -1440,7 +1530,7 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
     L += ["## Debrief", "", debrief or DEBRIEF_STUB, ""]
 
     L += ["## Data analysis", ""]
-    L += ["- " + f for f in findings(meta, report, names, pb, crashes)]
+    L += ["- " + f for f in findings(meta, report, names, pb, crashes, moves)]
     L += [""]
 
     L += ["## Lap times", "", "![Lap times](%s)" % rel(figs["timeline"]), ""]
@@ -1495,6 +1585,13 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
                   "than on it, and it is a placement error with a number on it. A landing "
                   "here is not a crash and is not in the crash table - unless the quad "
                   "never flew out of it again.", ""]
+
+    # Its own section, above the faults, and only when there is something in it.
+    # A manoeuvre is not a highlight in the "what went wrong" sense the next
+    # section means, and burying the one flight in ten that has acro in it under
+    # a heading about crashes and stalls is how it gets missed.
+    if moves:
+        L += manoeuvre_section(moves, rec_ids)
 
     # The section leads with the moments and ends with the reference tables, in
     # the order a pilot asks for them: what went wrong, then where it went

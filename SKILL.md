@@ -155,8 +155,9 @@ list naming what was left out and where it lives instead. Never re-derive from
 `flight.csv` what is already sitting in there.
 
 Report structure, in reading order: a compact header, then **Debrief**, **Data
-analysis**, **Lap times**, **Flight playback**, **Highlights and recordings**,
-then everything else collapsed. The debrief leads because it is the answer, and
+analysis**, **Lap times**, **Flight playback**, **Acrobatic manoeuvres** (only
+when the flight contains any), **Highlights and recordings**, then everything
+else collapsed. The debrief leads because it is the answer, and
 everything after it is the evidence — which only gets read when the answer
 provokes a question.
 
@@ -256,6 +257,20 @@ What to read in the numbers:
   white X, the same mark in the maps, the playbacks and the 3D recording. A stop is not a
   fault, it is a cost: read it off the clock, do not coach it. It is also taken
   out of `stalls`, so a six-second repair is not reported as a hesitation.
+- **`manoeuvres`** — every acrobatic manoeuvre in the flight, named by the body
+  axis the airframe turned about rather than by how far it leaned: a full turn of
+  pitch is a **backflip** (a **power loop** when the loop is big enough to have
+  gone round something), a full turn of roll an **axial roll**, half of each a
+  **split-S** or an **Immelmann** depending which half came first. The orbit, the
+  figure eight and the dive never leave upright, so those three are found in the
+  path — and an **orbit** must additionally show the nose pinned inward, because
+  a racing lap also comes round 360 degrees eventually. A window has to pass 110
+  degrees of tilt to be considered at all, which is what keeps hard racing
+  corners out: across 65 archived flights the detector fires on 21, and on a race
+  it is almost always a genuine dive down a face.
+  `complete: false` is the row worth reading — a rotation that stopped short is
+  the manoeuvre attempted, and the throttle quarters beside it usually say why.
+  Every one gets its own 3D recording, like a crash.
 - **`stalls`** — every episode below 10 km/h, classified `overrun` (the path
   reversed and retraced itself), `corner` (another lap turns there too, so the
   track asked for it) or `hesitation` (another lap flies straight through). This

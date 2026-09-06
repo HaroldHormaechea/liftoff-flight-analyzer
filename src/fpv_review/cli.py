@@ -26,6 +26,7 @@ from pathlib import Path
 
 from fpv_review.common import analysis
 from fpv_review.common import incident_view
+from fpv_review.common import manoeuvres
 from fpv_review.common import pbs
 from fpv_review.common import report
 from fpv_review.common import schema
@@ -499,8 +500,14 @@ def cmd_report(args, sim):
     # A stall used to get a flat SVG clip printed under the table; the recording
     # answers the same question in the place the reader asks it, and answers the
     # one the clip could not - what was actually around the quad.
+    # Manoeuvres, before the recordings, because each one gets a recording of
+    # its own. It runs on every flight: a race is expected to contain none, and
+    # on the archive it does - the detector requires the airframe to go past
+    # vertical, which a racing corner never does.
+    moves = manoeuvres.detect(series, data, ranges, names, dt)
+
     recs = {"geo": [], "props": [], "items": {}}
-    if not args.no_rec and (crashes or any(e["stalls"] for e in analysed)):
+    if not args.no_rec and (crashes or moves or any(e["stalls"] for e in analysed)):
         scenes = args.scenes or str(Path(args.track_dir) / "scenes")
         prop_table = args.props or str(Path(args.track_dir) / "props.json")
         geo_track, geo_race, geo_scene, geo_shapes, geo_note = (
@@ -508,7 +515,7 @@ def cmd_report(args, sim):
         recs = report.build_recordings(
             series, hits, crashes, analysed, names, geo_scene, geo_note,
             props_for_window(geo_track, geo_race, geo_shapes), cal.PROP_NOMINAL,
-            dt, args.rec_radius, args.stall_pad)
+            dt, args.rec_radius, args.stall_pad, moves=moves)
         if geo_note:
             print("  recordings: %s" % geo_note)
 
@@ -517,7 +524,7 @@ def cmd_report(args, sim):
     report.write(md_path,
                  report.build_report(meta, data, ranges, names, analysed, pb,
                                      figs, anims, rel, kept, crashes,
-                                     set(recs["items"]), pit_stops))
+                                     set(recs["items"]), pit_stops, moves))
     if kept:
         print("  kept the existing Debrief section")
     html_path = outdir / "report.html"
@@ -554,7 +561,18 @@ def cmd_report(args, sim):
                                and names[k].startswith("lap"))}
             for k, (a, b) in enumerate(ranges)],
         "segments": analysed,
-        "findings": report.findings(meta, analysed, names, pb, crashes),
+        "findings": report.findings(meta, analysed, names, pb, crashes, moves),
+        "manoeuvres": moves,
+        "manoeuvre_tally": manoeuvres.tally(moves),
+        "manoeuvre_detection": (
+            "named by which BODY axis the airframe turned about, from the "
+            "quaternions: a full turn of pitch is a loop, a full turn of roll an "
+            "axial roll, half of each a split-S or an Immelmann depending on which "
+            "half came first. A window must pass %.0f deg of tilt to be considered "
+            "at all, which is what keeps hard racing corners out. The orbit, the "
+            "figure eight and the dive never leave upright and are found in the "
+            "path instead. `complete: false` means the rotation stopped short."
+            % manoeuvres.ACRO_TILT),
         "crashes": crashes,
         "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "
                             "replay's isCrashed flag is not used, it reads false on "
@@ -588,7 +606,10 @@ def cmd_report(args, sim):
             "the corner table is collapsed in the report; full detail in "
             "segments[].corners, and every stall in segments[].stalls",
             "the recordings are in report.html only; the windows they cut are "
-            "described by crashes[] and segments[].stalls",
+            "described by crashes[], segments[].stalls and manoeuvres[]",
+            "the per-manoeuvre reasoning is summarised in the report; the full "
+            "rotation totals per axis are in manoeuvres[].pitch_deg / roll_deg / "
+            "yaw_deg",
         ],
     }
     with open(outdir / "analysis.json", "w", encoding="utf-8") as fh:

@@ -252,6 +252,39 @@ the replay records**, so a gate and a flight path compare with no
 transformation. For an item at yaw `r` the normal is `(sin r, 0, cos r)` and the
 width axis is `(cos r, 0, -sin r)`.
 
+## Naming a manoeuvre
+
+`common/manoeuvres.py` finds the eight manoeuvres the `manoeuvres/` cards teach.
+The one thing to understand before changing it:
+
+* **The discriminator is the AXIS, and `tilt` cannot supply it.** Tilt is the
+  angle between the mast and vertical, so it sweeps to 180 degrees in a backflip
+  and in an axial roll alike. Euler angles are no better - they gimbal-lock at
+  exactly the vertical attitudes every one of these manoeuvres passes through.
+  What works is `kinematics.body_rotation`: the relative quaternion
+  `conj(q_i) * q_(i+1)`, whose axis components ARE the body-axis increments
+  because it is expressed in the frame the airframe occupied at the start of the
+  step. Compose in the world frame instead and a roll flown while inverted is
+  attributed to the wrong axis.
+* **Cut the window per rotation, not per run of non-level flight.** Eleven
+  backflips in ninety seconds never settle back to upright for long, so one run
+  of tilted samples covers several and totalling it reports 747 degrees of pitch
+  as one very large loop. `_cut` closes a window whenever a full turn has
+  accumulated about one axis. A split-S is 180 and 180, so neither axis reaches
+  the cut and the pair stays together - which is what makes it recognisable.
+* **Test the full loop before the half-and-half case.** A flip flown with a
+  hundred degrees of roll in it is still a flip; checking `HALF <= pitch` and
+  `HALF <= roll` first calls it a split-S, which is a manoeuvre containing no
+  full loop at all.
+* **The 110-degree gate is what keeps racing out.** A hard racing corner sits at
+  70-80 degrees of tilt for a second at a time and accumulates real body-axis
+  rotation while it does - easily enough to look like a half loop. What it never
+  does is go past vertical.
+
+Thresholds live in that module rather than in a sim's calibration file: a
+backflip is 360 degrees of pitch in every simulator. Only `dt` is a sim's
+business.
+
 Three things that will bite a naive reader:
 
 * **Shipped races BRANCH, and the route walk must end on the Finish passage.**

@@ -28,6 +28,7 @@ from fpv_review.common import analysis
 from fpv_review.common import incident_view
 from fpv_review.common import manoeuvres
 from fpv_review.common import pbs
+from fpv_review.common import records
 from fpv_review.common import report
 from fpv_review.common import schema
 from fpv_review.common import toolkit
@@ -312,6 +313,13 @@ def add_report(sub, sim):
                     help="PB snapshot history, written by the `pbs --save` "
                          "command (default data/liftoff_history.json, relative "
                          "to the working directory)")
+    ap.add_argument("--records", default="data/liftoff_records.json",
+                    help="score log: the append-only record of tightest gate, "
+                         "gate accuracy and route overhead, one row per flight "
+                         "(default data/liftoff_records.json, relative to the "
+                         "working directory)")
+    ap.add_argument("--no-records", action="store_true",
+                    help="measure the scores but do not write them to the log")
     ap.add_argument("--reset-debrief", action="store_true",
                     help="discard the hand-written Debrief and put the stub back; "
                          "without it, an existing Debrief is carried forward")
@@ -430,6 +438,35 @@ def cmd_report(args, sim):
         sys.exit("no moving samples in %s" % path)
     pb = pbs.pb_context(meta, args.history)
 
+    # The scores, before any figure is drawn: the report header quotes them and
+    # analysis.json carries them, so they cannot be a side effect of a later
+    # stage. Deliberately NOT inside the `--no-rec` branch below - a pilot's
+    # record must not depend on a flag about recordings.
+    gates, gates_note = sim["map"].route_gates(path, args.track_dir)
+    shape_table = {}
+    props_file = Path(args.props) if args.props else Path(args.track_dir) / "props.json"
+    if props_file.exists():
+        shape_table = json.loads(props_file.read_text(encoding="utf-8"))["items"]
+    meta["_race_name"] = report.race_name(meta)
+    scores, gate_crossings = records.score_flight(
+        series, gates, ranges, names, meta, shape_table,
+        cal.GATE_RECORD_MIN_KMH, cal.GATE_MIN_APERTURE_M)
+    entry = records.entry_for(meta, path, scores)
+    prior = records.standing(records.load(args.records),
+                             before=entry["flown_at"], exclude=entry["replay"])
+    score_table = records.compare(scores, prior)
+    if not args.no_records:
+        toolkit.refuse_inside_toolkit(args.records, "the score log")
+        kept_rows, replaced = records.record(args.records, entry)
+        print("  scores: %s row in %s (%d flights)"
+              % ("updated the" if replaced else "added a", args.records, len(kept_rows)))
+    for name, row in score_table.items():
+        if row["value"] is not None and row["is_record"]:
+            print("  RECORD  %s: %s%s" % (row["label"], row["value"],
+                  "" if row["best_before"] is None else " (was %s)" % row["best_before"]))
+    if gates_note:
+        print("  scores: %s" % gates_note)
+
     # Pit stops, before any figure is drawn: they put an icon on two of them and
     # they decide what the crash table is allowed to contain.
     pit_vols = sim["map"].pits_for(path, args.track_dir)
@@ -524,7 +561,8 @@ def cmd_report(args, sim):
     report.write(md_path,
                  report.build_report(meta, data, ranges, names, analysed, pb,
                                      figs, anims, rel, kept, crashes,
-                                     set(recs["items"]), pit_stops, moves))
+                                     set(recs["items"]), pit_stops, moves,
+                                     score_table))
     if kept:
         print("  kept the existing Debrief section")
     html_path = outdir / "report.html"
@@ -573,6 +611,32 @@ def cmd_report(args, sim):
             "figure eight and the dive never leave upright and are found in the "
             "path instead. `complete: false` means the rotation stopped short."
             % manoeuvres.ACRO_TILT),
+        "scores": score_table,
+        "scores_detail": scores,
+        "scores_standing_before": prior,
+        "scores_explained": (
+            "cross-track measures of how well the flight was FLOWN, so a run on "
+            "a track never raced before can still beat something. Lower is "
+            "better on all three. tightest_gate is the narrowest real opening "
+            "crossed cleanly above %.0f km/h, in metres; gate_accuracy is the "
+            "median share of the available half-width used at a gate, which is "
+            "what makes two different-sized gates comparable; route_overhead is "
+            "the best timed lap's path against the route length, as a percent. "
+            "`best_before` is the standing record from flights flown EARLIER, "
+            "so `is_record` means this flight beat it. A null value carries a "
+            "`why` and never enters a ranking."
+            % cal.GATE_RECORD_MIN_KMH),
+        "gate_crossings": gate_crossings,
+        "gate_crossing_detection": (
+            "interpolated onto each checkpoint's plane in route order, not "
+            "taken from the nearest sample: at 10 Hz and racing speed the "
+            "samples are ~1.8 m apart, which is the same order as the offsets "
+            "being measured. `lateral_m` is across the opening and `vertical_m` "
+            "up it, both signed. `clean` means inside the opening on both axes. "
+            "`aperture_source` says where the opening came from - `scale` from "
+            "the track, `name` from the prefab's own name, `colliders` from the "
+            "gap its solid parts leave - and is null when it could not be "
+            "established, which is why that crossing sets no record."),
         "crashes": crashes,
         "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "
                             "replay's isCrashed flag is not used, it reads false on "
@@ -636,6 +700,64 @@ def cmd_report(args, sim):
             print("  (could not open a browser; open the file above by hand)")
 
 # ---------------------------------------------------------------------- pbs
+
+def add_scores(sub, sim):
+    ap = sub.add_parser("scores", prog="%s scores" % PROG,
+                        description=records.__doc__,
+                        formatter_class=argparse.RawDescriptionHelpFormatter,
+                        help="standing records and their progression")
+    ap.add_argument("--records", default="data/liftoff_records.json",
+                    help="the score log written by `report` (default "
+                         "data/liftoff_records.json, relative to the working "
+                         "directory - never the script's own folder, which may "
+                         "be shared or public)")
+    ap.add_argument("--score", help="show the full progression of one score")
+    ap.add_argument("--json", action="store_true", help="dump the log instead")
+    ap.set_defaults(run=cmd_scores)
+
+
+def cmd_scores(args, sim):
+    entries = records.load(args.records)
+    if not entries:
+        sys.exit("no scores yet in %s. They are written by the `report` command."
+                 % args.records)
+    if args.json:
+        print(json.dumps(entries, indent=2))
+        return
+    lead = records.standing(entries)
+    print("%d flights scored, %s to %s"
+          % (len(entries), entries[0].get("flown_at") or "?",
+             entries[-1].get("flown_at") or "?"))
+    print()
+    for name, spec in records.SCORES.items():
+        if args.score and args.score != name:
+            continue
+        best = lead.get(name)
+        print("%s  (%s is better, %s)" % (name, spec["better"], spec["unit"]))
+        if not best:
+            print("  never measured yet")
+            print()
+            continue
+        print("  BEST %-8s %s   %s   %s"
+              % (best["value"], best.get("flown_at") or "?",
+                 best.get("race") or "?", best.get("replay") or ""))
+        # The progression, not the log: only the flights that MOVED the record.
+        # A list of every flight's score is the log, and the log is in the file;
+        # what a pilot wants to see is the staircase.
+        seen = None
+        for e in entries:
+            v = ((e.get("scores") or {}).get(name) or {}).get("value")
+            if v is None:
+                continue
+            better = seen is None or (v < seen if spec["better"] == "lower" else v > seen)
+            if not better:
+                continue
+            print("       %-8s %s   %s%s"
+                  % (v, (e.get("flown_at") or "?")[:16], e.get("race") or "?",
+                     "" if seen is None else "   (%+g)" % round(v - seen, 3)))
+            seen = v
+        print()
+
 
 def add_pbs(sub, sim):
     ap = sub.add_parser("pbs", prog="%s pbs" % PROG,
@@ -828,13 +950,14 @@ def build_parser(sim_name=DEFAULT_SIM):
                     help="which sim's ingestion to use (default: %s)" % DEFAULT_SIM)
     sub = ap.add_subparsers(dest="command", metavar="<command>")
     # Registration order is the order --help prints the commands in: view,
-    # analyse, report, pbs, then SIM_COMMANDS order. Preserved exactly.
+    # analyse, report, pbs, scores, then SIM_COMMANDS order.
     if "view" not in skipped:
         add_view(sub, sim)
     add_analyse(sub, sim, sim_name)
     add_report(sub, sim)
     if "pbs" not in skipped:
         add_pbs(sub, sim)
+    add_scores(sub, sim)
     add_sim_commands(sub, sim)
     return ap
 

@@ -120,3 +120,32 @@ def geometry_for(replay, track_dir, scenes_dir, props_path):
         missing.append("prop shapes are not cached (build them with the `props` "
                        "command)")
     return track, race, scene, shapes, ("; ".join(missing) if missing else "")
+
+
+def route_gates(replay, track_dir):
+    """The route's checkpoints, in the order flown -> (gates, note).
+
+    Separate from `geometry_for` for the same reason `pits_for` is: that one
+    exists to DRAW the environment and is skipped entirely by --no-rec, while
+    the scores are measured on every run. Folding the gates in there would make
+    a pilot's records depend on a flag about recordings.
+
+    A checkpoint the track does not define comes back as None from
+    `tracks.gates` and is dropped here, because a scorer wants the checkpoints
+    it can measure, not a list with holes in it. `note` says when there are
+    none, since a flight scoring no gates and a flight with no track data look
+    identical from the outside and are not the same thing."""
+    try:
+        track, race, _tid, _rid = tracks.for_replay(track_dir, replay)
+    except Exception:
+        return [], "no track index; run the `tracks` command"
+    if track is None or race is None:
+        return [], ("no track data for this replay, so no checkpoint could be "
+                    "measured")
+    found = tracks.gates(tracks.parse_xml(Path(track_dir) / track["file"]),
+                         race.get("route") or [])
+    keep = [g for g in found if g]
+    if len(keep) < len(found):
+        return keep, ("%d of %d checkpoints are not defined by the track"
+                      % (len(found) - len(keep), len(found)))
+    return keep, ""

@@ -183,6 +183,11 @@ pilot sees the report rather than a path to it. Pass `--no-open` when that is a
 nuisance — a batch run, or the regeneration in step 4 that only exists to pick
 up a hand-written debrief.
 
+`--records <path>` is where the cross-track scores are logged, one row per
+flight; pass it on every run or the records land in the default `data/` folder
+and the pilot's history is split across two files. `--no-records` measures them
+without writing.
+
 Useful flags: `--no-anim` when only the numbers are wanted, `--no-open` to keep
 the browser shut, `--cam-span` for the follow-cam width in metres, `--stall-pad`
 for context around a stall recording, `--no-rec` to skip the recordings entirely,
@@ -364,12 +369,99 @@ pilot has already fixed reads as padding, and the report is short on purpose.
 `docs/manoeuvres.md` covers the interactive version, the trap about which element
 to hand the viewer, and how to add a ninth.
 
+**Check the scores before you write.** `analysis.json` carries a `scores` block
+comparing this flight against every earlier one on three cross-track measures —
+see "The scores" below. A record belongs in the assessment as one sentence with
+its previous number; a score that did not move is only worth a line when the gap
+has a cause. Never lead with one, and never turn one into the drill.
+
 Tone: lead with the number and the cause. Name **one** thing to fix and give
 **one** drill. Do not stack three — a pilot who is given three fixes does none of
 them, and the next flight's data cannot attribute a change to any of them.
 
 Then say the same thing in chat, short, and link the report. Do not paste the
 tables into the conversation; they are in the file.
+
+## The scores — how a pilot beats something on a track they have never flown
+
+A lap time is trapped on its track. It cannot say whether this week was better
+than last, and on a new map there is nothing to beat at all. `pbs` owns the
+per-track clock and is the right tool for that question. The **scores** are the
+other half: three quantities that mean the same thing on every track, so a
+first run on a new map can still set a record.
+
+`report` measures them on every run and appends one row per flight to a log:
+
+```bash
+python "$FPV/src" report <replay> ... --records <project>/liftoff_records.json
+python "$FPV/src" scores --records <project>/liftoff_records.json
+python "$FPV/src" scores --records <path> --score tightest_gate
+```
+
+**The log lives in the pilot's project, never in the toolkit** — it is their
+flying, and the toolkit may be public. `refuse_inside_toolkit()` stops a write
+that would land inside a linked toolkit, and `--no-records` measures without
+writing at all.
+
+| score | what it is | better |
+|---|---|---|
+| `tightest_gate` | narrowest real opening crossed cleanly, above 30 km/h, in metres | lower |
+| `gate_accuracy` | median share of the available half-width used at a gate | lower |
+| `route_overhead` | best timed lap's path against the route length, percent | lower |
+
+Three, not thirty. A scoreboard nobody reads makes every debrief longer without
+making one of them sharper, and each of these three earned its place by being a
+number a real debrief had already reached for by hand.
+
+**`gate_accuracy` is a SHARE, not metres, and that is the whole point.** Metres
+are not comparable between gates: 0.33 m through a 2.4 m arch uses more of the
+gap than 0.31 m through a 2.0 m box, so the raw number reports a flight as worse
+when it was better. The metres are still in `detail.median_lateral_m` when a
+debrief wants something concrete to quote.
+
+### The store
+
+`liftoff_records.json` is an append-only log of entries and nothing else. There
+is no "bests" block: `standing()` recomputes the leaders on every read, so a
+stored best can never go stale, and `standing(entries, before=t)` can answer the
+question a debrief actually asks — *what was the record before this flight*.
+
+Re-running a report replaces that flight's own row rather than adding a second
+one, so the two regenerations every review does cannot double-count a flight.
+Every other row is untouched: the log only grows by flights.
+
+### Using them in a debrief
+
+`analysis.json` carries `scores`, already compared for you. Every row has
+`value`, `best_before`, `is_record`, `delta` and, when it could not be measured,
+a `why`. The report prints the same table under **Data analysis**.
+
+- **A record is one sentence, in the same register as everything else.** Give
+  the number, the previous number and where it stood: "2.00 m gate at 67 km/h,
+  against 2.40 m on Field Day". No congratulation.
+- **A near miss is worth more than a record.** `delta` on a score that did not
+  move is the gap, and a gap with a cause is a fix. A record with no cause is
+  just a number.
+- **Never open a debrief with a score.** They are evidence, not the answer. The
+  assessment leads; a score supports it or it stays in the table.
+- **Never coach a score directly.** "Get your gate accuracy down" is not a drill.
+  Name the gate, the approach and the number, and let the score record that it
+  worked.
+- **Read `why` before saying a score got worse.** A null is not a regression: a
+  flight with no track data, or a free-flight file with no route, measures no
+  gates at all, and the row says so.
+- **`aperture_source` is the credibility of a tightest-gate record.** `scale`
+  and `name` are exact; `colliders` is inferred from the frame's solid parts.
+  A record set on `colliders` is worth a hedge if the pilot questions it.
+- **Some checkpoints are trigger slabs, not gates.** Anything narrower than
+  0.8 m is excluded from the tightness record: A League Of Its Own carries two
+  at 0.25 x 6.00 m, and one fluke pass would otherwise mint an unbeatable
+  record that meant nothing. They still appear in `gate_crossings`.
+
+`gate_crossings` in `analysis.json` holds every crossing with its lateral and
+vertical offset, signed. Reach for it when the question is *where* the accuracy
+went, not *whether* it did — a pilot who is 0.2 m laterally and 1.3 m low has a
+vertical problem, and the score alone cannot say that.
 
 ## Step 5 — the other sources, only when needed
 

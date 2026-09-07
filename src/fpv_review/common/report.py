@@ -1498,8 +1498,54 @@ def manoeuvre_section(moves, rec_ids):
             ""] + body
 
 
+def scores_block(scores):
+    """The cross-track scoreboard, as a table the debrief can point at.
+
+    It sits in Data analysis rather than in a section of its own because it is
+    evidence, not narrative: three rows do not earn a tab, and a scoreboard the
+    reader has to click to reach is a scoreboard nobody checks. A score that
+    could not be measured still gets its row, carrying the reason - a silently
+    missing row reads as "unchanged", which is the one thing it never means."""
+    if not scores:
+        return []
+    L = ["", "### Scores", "",
+         "Cross-track measures, so a first run on a new map can still beat "
+         "something. Lower is better on all three.", "",
+         "| score | this flight | best before | |",
+         "|---|---|---|---|"]
+    for row in scores.values():
+        if row["value"] is None:
+            L.append("| %s | not measured | %s | %s |"
+                     % (esc(row["label"]),
+                        "-" if row["best_before"] is None else esc(str(row["best_before"])),
+                        esc(row.get("why") or "")))
+            continue
+        unit = row["unit"]
+        val = "%s %s" % (row["value"], unit) if unit != "%" else "%s%%" % row["value"]
+        if row["best_before"] is None:
+            note = "**first measured**"
+            was = "-"
+        else:
+            was = ("%s %s" % (row["best_before"], unit) if unit != "%"
+                   else "%s%%" % row["best_before"])
+            if row["previous_holder"]:
+                was += ", %s" % esc(str(row["previous_holder"]))
+            note = ("**record, %+g**" % row["delta"] if row["is_record"]
+                    else "%+g" % row["delta"])
+        L.append("| %s | %s | %s | %s |" % (esc(row["label"]), val, was, note))
+    tight = scores.get("smallest_gate") or {}
+    d = tight.get("detail") or {}
+    if tight.get("value") is not None and d.get("aperture"):
+        L += ["", "Smallest gate: %s, a %.2f x %.2f m opening, crossed at %s km/h "
+              "%.2f m off centre laterally and %.2f m vertically."
+              % (esc(str(d.get("item") or "checkpoint %s" % d.get("checkpoint"))),
+                 d["aperture"][0], d["aperture"][1], d.get("speed_kmh"),
+                 d.get("lateral_m", 0.0), d.get("vertical_m", 0.0))]
+    return L + [""]
+
+
 def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrief=None,
-                 crashes=(), rec_ids=(), pits=(), moves=()):
+                 crashes=(), rec_ids=(), pits=(), moves=(), scores=None):
     """The reader's order, which is not the analysis order.
 
     The debrief comes first because it is the answer; everything after it is the
@@ -1532,6 +1578,7 @@ def build_report(meta, data, ranges, names, report, pb, figs, anims, rel, debrie
     L += ["## Data analysis", ""]
     L += ["- " + f for f in findings(meta, report, names, pb, crashes, moves)]
     L += [""]
+    L += scores_block(scores)
 
     L += ["## Lap times", "", "![Lap times](%s)" % rel(figs["timeline"]), ""]
 

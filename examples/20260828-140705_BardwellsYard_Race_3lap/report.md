@@ -31,6 +31,17 @@ The limitation this run exposes is transfer. The floor holds on a known track an
 - **3 corners skidded** (over 30 deg of sideslip).
 - **Best lap here was 0:26.184, against a personal best of 0:22.350** on the same geometry (+3.8 s).
 
+
+### Scores
+
+Cross-track measures, so a first run on a new map can still beat something. Lower is better on all three.
+
+| score | this flight | best before | |
+|---|---|---|---|
+| smallest gate flown clean | not measured | - | no checkpoint with an EXACT opening was crossed cleanly above 30 km/h; an opening inferred from the frame's colliders is measured but cannot set a record |
+| median margin used at a gate | 0.456 share of margin | - | **first measured** |
+| shortest line, best lap | 17.3% | - | **first measured** |
+
 ## Lap times
 
 ![Lap times](assets/timeline.svg)
@@ -139,4 +150,4 @@ Every lap on one map, each a different colour. Where the laps separate is a LINE
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-09-03 12:29 by `fpv-review`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-09-07 16:34 by `fpv-review`

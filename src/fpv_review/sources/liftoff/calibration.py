@@ -43,6 +43,18 @@ PROP_NOMINAL = (0.6, 1.0, 0.6)  # half-extents for a prop whose shape is unknown
 REC_RADIUS_M = 25.0             # environment geometry drawn around a recording
 CAM_SPAN_M = 45.0               # width of the follow cam on a lap animation
 
+# ------------------------------------------------------------- score records
+# What a crossing has to be before it is allowed to set a tightest-gate record.
+# Both are claims about Liftoff's own checkpoint prefabs and about the speed a
+# 180-class quad races at, so both are calibration rather than presentation.
+
+GATE_RECORD_MIN_KMH = 30.0      # easing through a small gate at walking pace is
+                                # a different skill from taking it at race speed
+GATE_MIN_APERTURE_M = 0.8       # narrower than this the "opening" is a scoring
+                                # slab, not a hole: A League Of Its Own carries
+                                # two checkpoints at 0.25 x 6.00 m, and one
+                                # fluke pass would mint an unbeatable record
+
 # -------------------------------------------------------- analysis thresholds
 # Every numeric default in common/analysis.py's parser, keyed by its argparse
 # `dest`. These were fixed empirically against one Liftoff flight - the Rustline

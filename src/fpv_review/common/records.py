@@ -72,7 +72,25 @@ FORMAT = 1
 # game names these prefabs after the hole in them, and for the fixed-size ones it
 # is the ONLY place the size exists. Their colliders are a unit cube scaled at
 # runtime, so props.json reports a 1 x 1 x 1 box for a 20 m gate.
-_NAMED = re.compile(r"(\d+(?:\.\d+)?)\s*m?\s*[xX]\s*(\d+(?:\.\d+)?)\s*m?", re.I)
+#
+# THE UNIT IS PART OF THE NAME AND MUST BE READ. LightGate300x220cmVarBlue01 is a
+# 3.00 x 2.20 m gate, not a 300 x 220 m one. Dropping the `cm` inflated 23 gates
+# of one route by a hundred, which did not merely mis-score them: `_plane_crossing`
+# sizes its acceptance window off the aperture, so a 150 m half-width accepted a
+# pass 142.7 m away as a crossing, the monotonic cursor jumped to it, and 15 of
+# that route's 38 checkpoints then matched nothing at all. It also minted an
+# all-time gate-accuracy record of 0.004 against a standing 0.112. One missing
+# unit, three symptoms.
+_NAMED = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(mm|cm|m)?\s*[xX]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?", re.I)
+_UNIT = {"mm": 0.001, "cm": 0.01, "m": 1.0, None: 1.0, "": 1.0}
+
+# No checkpoint in the game is wider than this. An aperture beyond it is a parse
+# that went wrong, and the honest answer is then None - a crossing with no
+# aperture is still measured, it just sets no record. Liftoff's widest is the
+# 45 x 30 m resizable box on Hannover's The Biggest Yet, which arrives by `scale`
+# and is exact, so this only ever guards the inferred sources.
+_MAX_APERTURE_M = 60.0
 
 
 def aperture_of(gate, shapes=None):
@@ -85,17 +103,25 @@ def aperture_of(gate, shapes=None):
     an arch as if it were centred put a third of a clean 3-lap race outside its
     own gates - every one of them "too high", every one of them actually fine.
 
-    Four sources, tried in the order of how much they are trusted, and the one
+    Five sources, tried in the order of how much they are trusted, and the one
     used is RETURNED rather than assumed, because a record's credibility is the
     credibility of its aperture:
 
       "scale"      the track's own aperture. Resizable prefabs carry their size
                    as a scale on the placement, and it is exact.
-      "name"       parsed from the prefab name for the fixed-size prefabs. Also
-                   exact: it is what the prefab is called.
+      "trigger"    the prefab's own scoring volume, from props.py. This is the
+                   game's answer to "did I pass through", so where it exists and
+                   is real it beats every inference below it - and it is the only
+                   source that carries the centre height for free.
+      "name"       parsed from the prefab name for the fixed-size prefabs, unit
+                   included. Exact, but the axis ORDER is not reliable, which is
+                   why the trigger outranks it: GenericGate200x250cm01's trigger
+                   is 2.70 x 2.20 m, i.e. 250 wide by 200 tall plus the usual
+                   10 cm of slack, so the name reads height first there and width
+                   first on LightGate300x220cm.
       "colliders"  the gap between the prop's solid parts, from props.py. Used
-                   for frames and arches that are neither resizable nor named -
-                   an inflatable arch's uprights and top bar bound a real hole.
+                   for frames and arches that are neither resizable, named, nor
+                   carrying a box trigger.
       None         no opening could be established. The crossing is still
                    measured; it just cannot set a tightness record.
     """
@@ -103,10 +129,65 @@ def aperture_of(gate, shapes=None):
     if ap and len(ap) == 2 and all(v and v > 0 for v in ap):
         return (float(ap[0]), float(ap[1]), 0.0), "scale"
     name = gate.get("item") or ""
+    shape = (shapes or {}).get(name, {}).get("colliders", [])
+    trig = _opening_from_trigger(shape)
+    if trig[0]:
+        return trig
     m = _NAMED.search(name)
     if m:
-        return (float(m.group(1)), float(m.group(2)), 0.0), "name"
-    return _opening_from_colliders((shapes or {}).get(name, {}).get("colliders", []))
+        # A unit written once governs both numbers: GenericGate200x250cm01 is
+        # 2.00 x 2.50 m, not 200 m by 2.50 m. Only CheckpointBox20mX10m01 spells
+        # it out on each. Where neither carries one - MultiGPChampTrack8x10Frame
+        # - metres is the reading, and the guard below catches it if that is
+        # wrong rather than letting it set a record.
+        u1, u2 = (m.group(2) or "").lower(), (m.group(4) or "").lower()
+        w = float(m.group(1)) * _UNIT.get(u1 or u2, 1.0)
+        h = float(m.group(3)) * _UNIT.get(u2 or u1, 1.0)
+        if 0 < w <= _MAX_APERTURE_M and 0 < h <= _MAX_APERTURE_M:
+            return (w, h, 0.0), "name"
+        return None, None
+    return _opening_from_colliders(shape)
+
+
+def _opening_from_trigger(shape):
+    """The prefab's own scoring volume -> ((w, h, centre_y), "trigger") or (None, None).
+
+    A checkpoint prefab carries a `trig` box: the volume the game itself tests
+    the quad against. That makes it the best aperture there is - it needs no
+    inference, and unlike the name it carries the centre height, which is what
+    stops a gate whose opening sits 1.44 m off the ground reading as 1.6 m high
+    on every single crossing.
+
+    Two prefabs it must NOT be used for, and both are detectable rather than
+    listed: the `CheckpointBox*` family, whose trigger is a unit cube scaled at
+    runtime and so reports 1 x 1 x 1 m for a 20 m gate, and anything whose
+    trigger is a mesh rather than a box.
+
+    Picking the two axes out of three: y is always up, so the height is direct.
+    For the width, the thin horizontal axis is the plane normal - 0.13 m on a
+    light gate, 0.07 m on a truss finish - so the other one is the opening. Where
+    neither horizontal is thin the trigger is a VOLUME rather than a plane (the
+    truss cube, 1.70 x 1.70 m in plan), and the narrower horizontal is then the
+    real constraint. Erring narrow is the safe direction: it makes `clean`
+    stricter and `margin_used` larger, so it can never mint a record that is not
+    there."""
+    boxes = [c for c in shape
+             if c.get("trig") and c.get("t") == "box" and len(c.get("s") or []) == 3]
+    if not boxes:
+        return None, None
+    c = boxes[0]
+    sx, sy, sz = (abs(v) for v in c["s"])
+    cy = c["p"][1]
+    # The runtime-scaled unit cube. Nothing real is a 1 m cube centred on its
+    # own origin, so this identifies the CheckpointBox family without naming it.
+    if abs(cy) < 1e-6 and all(abs(v - 0.5) < 1e-3 for v in (sx, sy, sz)):
+        return None, None
+    lo, hi = min(sx, sz), max(sx, sz)
+    half_w = hi if lo < 0.5 * hi else lo
+    w, h = 2.0 * half_w, 2.0 * sy
+    if not (0 < w <= _MAX_APERTURE_M and 0 < h <= _MAX_APERTURE_M):
+        return None, None
+    return (round(w, 2), round(h, 2), round(cy, 2)), "trigger"
 
 
 def _opening_from_colliders(shape):
@@ -220,9 +301,28 @@ def crossings(series, gates, ranges, names, shapes=None, min_aperture_m=0.0,
     for lo, hi in lap_windows:
         plan += [(order, g, lo, hi) for order, g in list(enumerate(gates))[1:]]
     cursor = 0
-    for order, gate, lo, hi in plan:
+    for step, (order, gate, lo, hi) in enumerate(plan):
         ap, ap_src = aperture_of(gate, shapes)
         hit = _plane_crossing(series, gate, max(cursor, lo), hi, ap)
+        # YOU CANNOT CROSS GATE 9 AFTER YOU HAVE ALREADY CROSSED GATE 10, and a
+        # route that visits the same checkpoint twice is where that stops being
+        # obvious. Hannover's Got Intel passes truss gate 595 as both gate 9 and
+        # gate 19. He clipped the first pass 4.6 m wide, outside the acceptance
+        # window, so the walk ran on and matched the SECOND pass instead - and
+        # the monotonic cursor, now 33 s downstream, then found nothing for
+        # gates 10 to 19. Ten checkpoints lost to one wide pass.
+        #
+        # One step of lookahead settles it without a cursor that can go
+        # backwards: if the next checkpoint is already crossed by the time this
+        # one supposedly was, this match belongs to a later visit and the honest
+        # answer is that this crossing was not found.
+        if hit is not None and step + 1 < len(plan):
+            nxt_order, nxt_gate, nxt_lo, nxt_hi = plan[step + 1]
+            nxt_ap, _ = aperture_of(nxt_gate, shapes)
+            nxt = _plane_crossing(series, nxt_gate, max(cursor, nxt_lo), nxt_hi,
+                                  nxt_ap)
+            if nxt is not None and nxt[3] < hit[3]:
+                hit = None
         if hit is None:
             continue
         lat, vert, spd, j = hit
@@ -354,12 +454,14 @@ def score_flight(series, gates, ranges, names, meta, shapes=None,
     # 1. tightest gate: the narrowest real opening crossed clean, at speed.
     # EXACT apertures only. `colliders` is an inference from the frame's solid
     # parts, and an inference that is 15% out sets a record 15% too good which
-    # then stands forever. `scale` is the track's own number and `name` is what
-    # the prefab is called; both are facts. An inferred opening still measures
-    # the crossing and still counts towards gate_accuracy, where being uniformly
-    # out on one prefab shifts every crossing through it together.
+    # then stands forever. `scale` is the track's own number, `name` is what the
+    # prefab is called, and `trigger` is the volume the game itself scores the
+    # crossing against - all three are facts rather than inferences. An inferred
+    # opening still measures the crossing and still counts towards gate_accuracy,
+    # where being uniformly out on one prefab shifts every crossing through it
+    # together.
     fast = [c for c in xs if c["clean"] and c["real_opening"]
-            and c["aperture_source"] in ("scale", "name")
+            and c["aperture_source"] in ("scale", "name", "trigger")
             and c["speed_kmh"] >= min_kmh]
     if fast:
         # Tightest first, then fastest, then closest to centre. Several

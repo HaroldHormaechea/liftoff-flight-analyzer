@@ -634,8 +634,10 @@ def cmd_report(args, sim):
             "being measured. `lateral_m` is across the opening and `vertical_m` "
             "up it, both signed. `clean` means inside the opening on both axes. "
             "`aperture_source` says where the opening came from - `scale` from "
-            "the track, `name` from the prefab's own name, `colliders` from the "
-            "gap its solid parts leave - and is null when it could not be "
+            "the track, `trigger` from the prefab's own scoring volume, "
+            "`name` from the prefab's own name (unit included: a "
+            "`300x220cm` gate is 3.00 x 2.20 m), `colliders` from the gap "
+            "its solid parts leave - and is null when it could not be "
             "established, which is why that crossing sets no record."),
         "crashes": crashes,
         "crash_detection": ("speed lost inside one 0.1 s sample, >= %.0f km/h; the "

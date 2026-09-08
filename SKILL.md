@@ -451,8 +451,11 @@ a `why`. The report prints the same table under **Data analysis**.
   flight with no track data, or a free-flight file with no route, measures no
   gates at all, and the row says so.
 - **`aperture_source` is the credibility of a tightest-gate record.** `scale`
-  and `name` are exact; `colliders` is inferred from the frame's solid parts.
-  A record set on `colliders` is worth a hedge if the pilot questions it.
+  and `trigger` are exact — the track's own size, and the prefab's own scoring
+  volume. `name` is exact on size but reads the axis order off the prefab name,
+  which is not always width-first. `colliders` is inferred from the frame's
+  solid parts. A record set on `colliders` is worth a hedge if the pilot
+  questions it.
 - **Some checkpoints are trigger slabs, not gates.** Anything narrower than
   0.8 m is excluded from the tightness record: A League Of Its Own carries two
   at 0.25 x 6.00 m, and one fluke pass would otherwise mint an unbeatable

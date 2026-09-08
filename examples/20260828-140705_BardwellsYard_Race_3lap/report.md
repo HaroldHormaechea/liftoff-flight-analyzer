@@ -38,9 +38,11 @@ Cross-track measures, so a first run on a new map can still beat something. Lowe
 
 | score | this flight | best before | |
 |---|---|---|---|
-| smallest gate flown clean | not measured | - | no checkpoint with an EXACT opening was crossed cleanly above 30 km/h; an opening inferred from the frame's colliders is measured but cannot set a record |
-| median margin used at a gate | 0.456 share of margin | - | **first measured** |
+| smallest gate flown clean | 22.8 m2 | - | **first measured** |
+| median margin used at a gate | 0.402 share of margin | - | **first measured** |
 | shortest line, best lap | 17.3% | - | **first measured** |
+
+Smallest gate: InflatableArchBrandless01, a 6.18 x 3.69 m opening, crossed at 79.4 km/h -0.96 m off centre laterally and 1.47 m vertically.
 
 ## Lap times
 
@@ -150,4 +152,4 @@ Every lap on one map, each a different colour. Where the laps separate is a LINE
 
 ---
 
-Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-09-07 16:34 by `fpv-review`
+Replay `20260828-140705_BardwellsYard_Race_3lap.xml` · samples in `flight.csv` · **full analysis, including everything not drawn above, in `analysis.json`** · generated 2026-09-08 12:34 by `fpv-review`

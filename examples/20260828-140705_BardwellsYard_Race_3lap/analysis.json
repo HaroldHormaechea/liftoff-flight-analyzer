@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-07T16:34:24",
+  "generated": "2026-09-08T12:34:08",
   "source_replay": "C:\\Users\\harol\\OneDrive\\Documentos\\AI Personal Assistant\\fpv-drone\\replays\\20260828-140705_BardwellsYard_Race_3lap.xml",
   "race_name": "03 - Stuff That Works",
   "meta": {
@@ -608,19 +608,32 @@
   "manoeuvre_detection": "named by which BODY axis the airframe turned about, from the quaternions: a full turn of pitch is a loop, a full turn of roll an axial roll, half of each a split-S or an Immelmann depending on which half came first. A window must pass 110 deg of tilt to be considered at all, which is what keeps hard racing corners out. The orbit, the figure eight and the dive never leave upright and are found in the path instead. `complete: false` means the rotation stopped short.",
   "scores": {
     "smallest_gate": {
-      "value": null,
+      "value": 22.8,
       "unit": "m2",
       "label": "smallest gate flown clean",
       "best_before": null,
-      "is_record": false,
+      "is_record": true,
       "delta": null,
       "previous_holder": null,
       "previous_flown_at": null,
-      "why": "no checkpoint with an EXACT opening was crossed cleanly above 30 km/h; an opening inferred from the frame's colliders is measured but cannot set a record",
-      "detail": {}
+      "why": null,
+      "detail": {
+        "narrow_axis_m": 3.69,
+        "aperture": [
+          6.18,
+          3.69
+        ],
+        "aperture_source": "trigger",
+        "item": "InflatableArchBrandless01",
+        "checkpoint": 9,
+        "speed_kmh": 79.4,
+        "lateral_m": -0.96,
+        "vertical_m": 1.467,
+        "margin_used": 0.311
+      }
     },
     "gate_accuracy": {
-      "value": 0.456,
+      "value": 0.402,
       "unit": "share of margin",
       "label": "median margin used at a gate",
       "best_before": null,
@@ -631,9 +644,9 @@
       "why": null,
       "detail": {
         "crossings": 27,
-        "clean": 22,
+        "clean": 27,
         "median_lateral_m": 1.241,
-        "median_vertical_off_centre_m": 0.651,
+        "median_vertical_off_centre_m": 0.718,
         "worst_lateral_m": 2.959
       }
     },
@@ -656,15 +669,26 @@
   },
   "scores_detail": {
     "smallest_gate": {
-      "value": null,
-      "why": "no checkpoint with an EXACT opening was crossed cleanly above 30 km/h; an opening inferred from the frame's colliders is measured but cannot set a record"
+      "value": 22.8,
+      "narrow_axis_m": 3.69,
+      "aperture": [
+        6.18,
+        3.69
+      ],
+      "aperture_source": "trigger",
+      "item": "InflatableArchBrandless01",
+      "checkpoint": 9,
+      "speed_kmh": 79.4,
+      "lateral_m": -0.96,
+      "vertical_m": 1.467,
+      "margin_used": 0.311
     },
     "gate_accuracy": {
-      "value": 0.456,
+      "value": 0.402,
       "crossings": 27,
-      "clean": 22,
+      "clean": 27,
       "median_lateral_m": 1.241,
-      "median_vertical_off_centre_m": 0.651,
+      "median_vertical_off_centre_m": 0.718,
       "worst_lateral_m": 2.959
     },
     "route_overhead": {
@@ -682,15 +706,15 @@
       "order": 0,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -1.762,
       "vertical_m": 2.881,
-      "vertical_off_centre_m": 1.431,
-      "margin_used": 0.648,
+      "vertical_off_centre_m": 1.141,
+      "margin_used": 0.57,
       "speed_kmh": 64.2,
       "clean": true,
       "real_opening": true,
@@ -701,15 +725,15 @@
       "order": 1,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.205,
       "vertical_m": 2.04,
-      "vertical_off_centre_m": 0.59,
-      "margin_used": 0.075,
+      "vertical_off_centre_m": 0.3,
+      "margin_used": 0.066,
       "speed_kmh": 65.1,
       "clean": true,
       "real_opening": true,
@@ -720,17 +744,17 @@
       "order": 2,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.63,
       "vertical_m": 3.294,
-      "vertical_off_centre_m": 1.844,
-      "margin_used": 0.232,
+      "vertical_off_centre_m": 1.554,
+      "margin_used": 0.204,
       "speed_kmh": 78.8,
-      "clean": false,
+      "clean": true,
       "real_opening": true,
       "index": 84
     },
@@ -739,15 +763,15 @@
       "order": 3,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 2.069,
       "vertical_m": 2.557,
-      "vertical_off_centre_m": 1.107,
-      "margin_used": 0.761,
+      "vertical_off_centre_m": 0.817,
+      "margin_used": 0.669,
       "speed_kmh": 49.8,
       "clean": true,
       "real_opening": true,
@@ -758,15 +782,15 @@
       "order": 4,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.344,
       "vertical_m": 1.822,
-      "vertical_off_centre_m": 0.372,
-      "margin_used": 0.494,
+      "vertical_off_centre_m": 0.082,
+      "margin_used": 0.435,
       "speed_kmh": 35.2,
       "clean": true,
       "real_opening": true,
@@ -777,15 +801,15 @@
       "order": 5,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -1.573,
       "vertical_m": 2.616,
-      "vertical_off_centre_m": 1.166,
-      "margin_used": 0.578,
+      "vertical_off_centre_m": 0.876,
+      "margin_used": 0.509,
       "speed_kmh": 53.1,
       "clean": true,
       "real_opening": true,
@@ -796,15 +820,15 @@
       "order": 6,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.01,
       "vertical_m": 1.912,
-      "vertical_off_centre_m": 0.462,
-      "margin_used": 0.004,
+      "vertical_off_centre_m": 0.172,
+      "margin_used": 0.003,
       "speed_kmh": 50.9,
       "clean": true,
       "real_opening": true,
@@ -815,15 +839,15 @@
       "order": 7,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 2.625,
       "vertical_m": 1.159,
-      "vertical_off_centre_m": -0.291,
-      "margin_used": 0.965,
+      "vertical_off_centre_m": -0.581,
+      "margin_used": 0.85,
       "speed_kmh": 71.5,
       "clean": true,
       "real_opening": true,
@@ -834,15 +858,15 @@
       "order": 8,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.346,
       "vertical_m": 2.16,
-      "vertical_off_centre_m": 0.71,
-      "margin_used": 0.495,
+      "vertical_off_centre_m": 0.42,
+      "margin_used": 0.435,
       "speed_kmh": 60.0,
       "clean": true,
       "real_opening": true,
@@ -853,15 +877,15 @@
       "order": 9,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -0.96,
       "vertical_m": 1.467,
-      "vertical_off_centre_m": 0.017,
-      "margin_used": 0.353,
+      "vertical_off_centre_m": -0.273,
+      "margin_used": 0.311,
       "speed_kmh": 79.4,
       "clean": true,
       "real_opening": true,
@@ -872,17 +896,17 @@
       "order": 1,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 2.876,
       "vertical_m": 0.862,
-      "vertical_off_centre_m": -0.588,
-      "margin_used": 1.057,
+      "vertical_off_centre_m": -0.878,
+      "margin_used": 0.931,
       "speed_kmh": 59.2,
-      "clean": false,
+      "clean": true,
       "real_opening": true,
       "index": 321
     },
@@ -891,15 +915,15 @@
       "order": 2,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.844,
       "vertical_m": 2.818,
-      "vertical_off_centre_m": 1.368,
-      "margin_used": 0.678,
+      "vertical_off_centre_m": 1.078,
+      "margin_used": 0.597,
       "speed_kmh": 51.1,
       "clean": true,
       "real_opening": true,
@@ -910,15 +934,15 @@
       "order": 3,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -0.902,
       "vertical_m": 1.727,
-      "vertical_off_centre_m": 0.277,
-      "margin_used": 0.332,
+      "vertical_off_centre_m": -0.013,
+      "margin_used": 0.292,
       "speed_kmh": 50.7,
       "clean": true,
       "real_opening": true,
@@ -929,17 +953,17 @@
       "order": 4,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.472,
       "vertical_m": 2.945,
-      "vertical_off_centre_m": 1.495,
-      "margin_used": 0.541,
+      "vertical_off_centre_m": 1.205,
+      "margin_used": 0.476,
       "speed_kmh": 34.0,
-      "clean": false,
+      "clean": true,
       "real_opening": true,
       "index": 404
     },
@@ -948,17 +972,17 @@
       "order": 5,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.38,
       "vertical_m": 3.017,
-      "vertical_off_centre_m": 1.567,
-      "margin_used": 0.14,
+      "vertical_off_centre_m": 1.277,
+      "margin_used": 0.123,
       "speed_kmh": 57.0,
-      "clean": false,
+      "clean": true,
       "real_opening": true,
       "index": 427
     },
@@ -967,15 +991,15 @@
       "order": 6,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.999,
       "vertical_m": 0.788,
-      "vertical_off_centre_m": -0.662,
-      "margin_used": 0.367,
+      "vertical_off_centre_m": -0.952,
+      "margin_used": 0.323,
       "speed_kmh": 56.6,
       "clean": true,
       "real_opening": true,
@@ -986,17 +1010,17 @@
       "order": 7,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 2.959,
       "vertical_m": 2.489,
-      "vertical_off_centre_m": 1.039,
-      "margin_used": 1.088,
+      "vertical_off_centre_m": 0.749,
+      "margin_used": 0.958,
       "speed_kmh": 76.8,
-      "clean": false,
+      "clean": true,
       "real_opening": true,
       "index": 489
     },
@@ -1005,15 +1029,15 @@
       "order": 8,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -0.467,
       "vertical_m": 1.366,
-      "vertical_off_centre_m": -0.084,
-      "margin_used": 0.172,
+      "vertical_off_centre_m": -0.374,
+      "margin_used": 0.151,
       "speed_kmh": 57.5,
       "clean": true,
       "real_opening": true,
@@ -1024,15 +1048,15 @@
       "order": 9,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.241,
       "vertical_m": 2.014,
-      "vertical_off_centre_m": 0.564,
-      "margin_used": 0.456,
+      "vertical_off_centre_m": 0.274,
+      "margin_used": 0.402,
       "speed_kmh": 60.1,
       "clean": true,
       "real_opening": true,
@@ -1043,15 +1067,15 @@
       "order": 1,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.451,
       "vertical_m": 0.954,
-      "vertical_off_centre_m": -0.496,
-      "margin_used": 0.534,
+      "vertical_off_centre_m": -0.786,
+      "margin_used": 0.47,
       "speed_kmh": 62.3,
       "clean": true,
       "real_opening": true,
@@ -1062,15 +1086,15 @@
       "order": 2,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.478,
       "vertical_m": 2.675,
-      "vertical_off_centre_m": 1.225,
-      "margin_used": 0.176,
+      "vertical_off_centre_m": 0.935,
+      "margin_used": 0.155,
       "speed_kmh": 47.5,
       "clean": true,
       "real_opening": true,
@@ -1081,15 +1105,15 @@
       "order": 3,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.514,
       "vertical_m": 1.045,
-      "vertical_off_centre_m": -0.405,
-      "margin_used": 0.189,
+      "vertical_off_centre_m": -0.695,
+      "margin_used": 0.166,
       "speed_kmh": 49.6,
       "clean": true,
       "real_opening": true,
@@ -1100,15 +1124,15 @@
       "order": 4,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -0.064,
       "vertical_m": 1.911,
-      "vertical_off_centre_m": 0.461,
-      "margin_used": 0.023,
+      "vertical_off_centre_m": 0.171,
+      "margin_used": 0.021,
       "speed_kmh": 31.5,
       "clean": true,
       "real_opening": true,
@@ -1119,15 +1143,15 @@
       "order": 5,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -0.389,
       "vertical_m": 2.458,
-      "vertical_off_centre_m": 1.008,
-      "margin_used": 0.143,
+      "vertical_off_centre_m": 0.718,
+      "margin_used": 0.126,
       "speed_kmh": 26.6,
       "clean": true,
       "real_opening": true,
@@ -1138,15 +1162,15 @@
       "order": 6,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": -2.134,
       "vertical_m": 1.829,
-      "vertical_off_centre_m": 0.379,
-      "margin_used": 0.784,
+      "vertical_off_centre_m": 0.089,
+      "margin_used": 0.691,
       "speed_kmh": 48.7,
       "clean": true,
       "real_opening": true,
@@ -1157,15 +1181,15 @@
       "order": 7,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 1.563,
       "vertical_m": 2.101,
-      "vertical_off_centre_m": 0.651,
-      "margin_used": 0.575,
+      "vertical_off_centre_m": 0.361,
+      "margin_used": 0.506,
       "speed_kmh": 65.3,
       "clean": true,
       "real_opening": true,
@@ -1176,22 +1200,22 @@
       "order": 8,
       "item": "InflatableArchBrandless01",
       "aperture": [
-        5.44,
-        2.9
+        6.18,
+        3.69
       ],
-      "aperture_centre_y": 1.45,
-      "aperture_source": "colliders",
+      "aperture_centre_y": 1.74,
+      "aperture_source": "trigger",
       "lateral_m": 0.397,
       "vertical_m": 2.789,
-      "vertical_off_centre_m": 1.339,
-      "margin_used": 0.146,
+      "vertical_off_centre_m": 1.049,
+      "margin_used": 0.128,
       "speed_kmh": 59.9,
       "clean": true,
       "real_opening": true,
       "index": 829
     }
   ],
-  "gate_crossing_detection": "interpolated onto each checkpoint's plane in route order, not taken from the nearest sample: at 10 Hz and racing speed the samples are ~1.8 m apart, which is the same order as the offsets being measured. `lateral_m` is across the opening and `vertical_m` up it, both signed. `clean` means inside the opening on both axes. `aperture_source` says where the opening came from - `scale` from the track, `name` from the prefab's own name, `colliders` from the gap its solid parts leave - and is null when it could not be established, which is why that crossing sets no record.",
+  "gate_crossing_detection": "interpolated onto each checkpoint's plane in route order, not taken from the nearest sample: at 10 Hz and racing speed the samples are ~1.8 m apart, which is the same order as the offsets being measured. `lateral_m` is across the opening and `vertical_m` up it, both signed. `clean` means inside the opening on both axes. `aperture_source` says where the opening came from - `scale` from the track, `trigger` from the prefab's own scoring volume, `name` from the prefab's own name (unit included: a `300x220cm` gate is 3.00 x 2.20 m), `colliders` from the gap its solid parts leave - and is null when it could not be established, which is why that crossing sets no record.",
   "crashes": [],
   "crash_detection": "speed lost inside one 0.1 s sample, >= 20 km/h; the replay's isCrashed flag is not used, it reads false on flights that ended pinned against the ground. An impact inside a repair or recharge volume that the quad flew out of again is in pit_landings, not here; one it never flew out of stays here.",
   "pit_landings": [],
@@ -1203,7 +1227,7 @@
     "titles": {}
   },
   "personal_bests": {
-    "taken_at": "2026-09-07T15:30:02",
+    "taken_at": "2026-09-08T12:21:04",
     "best_race": 80.95347,
     "all_race": [
       80.95347,

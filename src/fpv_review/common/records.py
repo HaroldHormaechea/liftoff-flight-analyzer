@@ -302,8 +302,8 @@ def crossings(series, gates, ranges, names, shapes=None, min_aperture_m=0.0,
         plan += [(order, g, lo, hi) for order, g in list(enumerate(gates))[1:]]
     cursor = 0
     for step, (order, gate, lo, hi) in enumerate(plan):
-        ap, ap_src = aperture_of(gate, shapes)
-        hit = _plane_crossing(series, gate, max(cursor, lo), hi, ap)
+        hit, gate, ap, ap_src = _first_crossing(series, gate, max(cursor, lo), hi,
+                                                shapes)
         # YOU CANNOT CROSS GATE 9 AFTER YOU HAVE ALREADY CROSSED GATE 10, and a
         # route that visits the same checkpoint twice is where that stops being
         # obvious. Hannover's Got Intel passes truss gate 595 as both gate 9 and
@@ -318,9 +318,8 @@ def crossings(series, gates, ranges, names, shapes=None, min_aperture_m=0.0,
         # answer is that this crossing was not found.
         if hit is not None and step + 1 < len(plan):
             nxt_order, nxt_gate, nxt_lo, nxt_hi = plan[step + 1]
-            nxt_ap, _ = aperture_of(nxt_gate, shapes)
-            nxt = _plane_crossing(series, nxt_gate, max(cursor, nxt_lo), nxt_hi,
-                                  nxt_ap)
+            nxt = _first_crossing(series, nxt_gate, max(cursor, nxt_lo), nxt_hi,
+                                  shapes)[0]
             if nxt is not None and nxt[3] < hit[3]:
                 hit = None
         if hit is None:
@@ -330,6 +329,9 @@ def crossings(series, gates, ranges, names, shapes=None, min_aperture_m=0.0,
         out.append({
             "segment": seg_of.get(j),
             "order": order,
+            # Which checkpoint was crossed, not just which position: on a race
+            # with lanes the two boxes of a pair are the same prefab.
+            "checkpoint_id": gate.get("id"),
             "item": gate.get("item"),
             "aperture": [ap[0], ap[1]] if ap else None,
             "aperture_centre_y": ap[2] if ap else None,
@@ -361,6 +363,32 @@ def _inside(lat, vert, ap, item):
     if "Sphere" in (item or ""):
         return ((lat / (ap[0] / 2)) ** 2 + (dv / (ap[1] / 2)) ** 2) <= 1.0
     return abs(lat) <= ap[0] / 2 and abs(dv) <= ap[1] / 2
+
+
+def _first_crossing(series, gate, start, end, shapes=None):
+    """The crossing of one route position -> (hit, gate crossed, aperture, source).
+
+    A position is one checkpoint or, on a race whose branches line up, one of
+    several: `gate["alts"]`, from tracks.route_options. The earliest crossing
+    wins, because the route is flown forwards. The two boxes of a lane pair sit
+    side by side on one plane and are cut within a sample of each other, so there
+    the nearer centre decides - in units of each opening's half-width, not in
+    metres, so a wide box cannot win just by being wide.
+
+    With no `alts` this is exactly one _plane_crossing call. When nothing is
+    crossed `hit` is None and the listed gate comes back with its own aperture."""
+    ap, src = aperture_of(gate, shapes)
+    best, best_gate, best_ap, best_src, best_margin = None, gate, ap, src, None
+    for cand in [gate] + list(gate.get("alts") or []):
+        ap, src = aperture_of(cand, shapes)
+        hit = _plane_crossing(series, cand, start, end, ap)
+        if hit is None:
+            continue
+        margin = abs(hit[0]) / (ap[0] / 2) if ap and ap[0] > 0 else abs(hit[0])
+        if (best is None or hit[3] < best[3] - 2
+                or (abs(hit[3] - best[3]) <= 2 and margin < best_margin)):
+            best, best_gate, best_ap, best_src, best_margin = hit, cand, ap, src, margin
+    return best, best_gate, best_ap, best_src
 
 
 def _plane_crossing(series, gate, start, end, ap=None):

@@ -134,7 +134,12 @@ def route_gates(replay, track_dir):
     `tracks.gates` and is dropped here, because a scorer wants the checkpoints
     it can measure, not a list with holes in it. `note` says when there are
     none, since a flight scoring no gates and a flight with no track data look
-    identical from the outside and are not the same thing."""
+    identical from the outside and are not the same thing.
+
+    On a race whose branches line up (`tracks.route_options`), a gate also
+    carries `alts`: the other checkpoints that can be flown at its position. The
+    crossing matcher takes whichever one the flight went through; the route
+    length stays on the first arm."""
     try:
         track, race, _tid, _rid = tracks.for_replay(track_dir, replay)
     except Exception:
@@ -142,8 +147,21 @@ def route_gates(replay, track_dir):
     if track is None or race is None:
         return [], ("no track data for this replay, so no checkpoint could be "
                     "measured")
-    found = tracks.gates(tracks.parse_xml(Path(track_dir) / track["file"]),
-                         race.get("route") or [])
+    track_root = tracks.parse_xml(Path(track_dir) / track["file"])
+    order = race.get("route") or []
+    found = tracks.gates(track_root, order)
+    try:
+        options = tracks.route_options(tracks.parse_xml(Path(track_dir) / race["file"]))
+    except Exception:
+        options = None
+    if options and len(options) == len(found):
+        table = tracks.blueprints(track_root)
+        for k, g in enumerate(found):
+            # A copy, because a checkpoint visited twice is one dict in `found`
+            # and its two visits can have different alternatives.
+            alts = [table[c] for c in options[k][1:] if table.get(c)]
+            if g and alts and options[k][0] == order[k]:
+                found[k] = dict(g, alts=alts)
     keep = [g for g in found if g]
     if len(keep) < len(found):
         return keep, ("%d of %d checkpoints are not defined by the track"

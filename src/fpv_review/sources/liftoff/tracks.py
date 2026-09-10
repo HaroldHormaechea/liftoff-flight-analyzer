@@ -345,6 +345,64 @@ def walk_route(race_root):
     return order, {"finished": finished, "finish_id": finish_id, "branches": branches}
 
 
+def route_options(race_root, max_paths=4096):
+    """What may be flown at each position of the route -> [[checkpoint ids]], or None.
+
+    walk_route takes the first successor at a branch. That is right for the
+    route's length and wrong for its crossings the moment a pilot takes the other
+    arm. LiftoffArena / "07 - Round and Around" is two lanes of boxes 6.3 m apart
+    (45/40, 44/41, 42/43, 46/47, then 48/49 after a crossover), and either box of
+    a pair scores. A lap flown in the second lane matched none of the first
+    lane's boxes, so the walk found 6 of the 19 crossings of a clean 2-lap race.
+
+    The arms line up position by position when every Start-to-Finish path has the
+    same length, and on 10 of the 12 shipped races that branch they do - Railline
+    and No Ticket Needed included. Each position then lists every checkpoint any
+    path puts there, the first arm's first, and the crossing matcher takes
+    whichever one the flight actually went through.
+
+    Where the paths differ in length (Spare Tires 26/27, Choice Matters 19/20)
+    positions do not correspond, and a lined-up list would pair unrelated gates,
+    so this returns None and the first arm stands alone as before. It also
+    returns None when nothing branches, and when there are more than `max_paths`
+    paths rather than enumerating a graph without end."""
+    passages, start = {}, None
+    listed = race_root.find("checkPointPassages")
+    for passage in listed if listed is not None else []:
+        uid = _text(passage, "uniqueId")
+        passages[uid] = passage
+        if _text(passage, "passageType") == "Start":
+            start = uid
+    if start is None:
+        return None
+    paths, stack = [], [(start, (start,))]
+    while stack:
+        uid, path = stack.pop()
+        passage = passages[uid]
+        if _text(passage, "passageType") == "Finish":
+            paths.append(path)
+            if len(paths) > max_paths:
+                return None
+            continue
+        following = [s.text for s in passage.findall("./nextPassageIDs/string") if s.text]
+        # Pushed in reverse, so the first successor is walked first and the first
+        # path completed is the one walk_route returns.
+        for nxt in reversed(following):
+            if nxt in passages and nxt not in path:
+                stack.append((nxt, path + (nxt,)))
+    if len(paths) < 2 or len({len(p) for p in paths}) != 1:
+        return None
+    ids = [[int(_text(passages[u], "checkPointID", "0")) for u in p] for p in paths]
+    options = []
+    for k in range(len(ids[0])):
+        column = []
+        for p in ids:
+            if p[k] not in column:
+                column.append(p[k])
+        options.append(column)
+    return options
+
+
 def route(race_root):
     """Checkpoint IDs in the order they must be flown, Start to Finish.
 
@@ -535,8 +593,9 @@ def route_warnings(race):
                      "way the walk cannot follow.")
     branches = race.get("branches") or []
     if branches:
-        notes.append("note: %d branch%s in this route; the first arm was taken (%s). "
-                     "Resolve the arm against the flight before trusting a leg split."
+        notes.append("note: %d branch%s in this route; the first arm is listed (%s). "
+                     "Gate crossings take whichever arm was flown when every path "
+                     "is the same length; a leg split still follows the listed arm."
                      % (len(branches), "" if len(branches) == 1 else "es",
                         ", ".join("cp%d -> %s" % (cid, "/".join(str(n) for n in nxt))
                                   for cid, nxt in branches[:4])))
